@@ -1,12 +1,12 @@
-Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH
+Welcome to FRIED POTATO - Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol 
 
-POTATO -- 2022-09-21
+FRIED POTATO is an extension of the original POTATO (developed by Lukáš Pekárek and Stefan Buck under supervision of Neva Caliskan 
 
-Developed by Lukáš Pekárek and Stefan Buck at the Helmholtz Institute for RNA-based Infection Research
+at the Helmholtz Institute for RNA-based Infection Research (Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH)). 
 
-in the research group REMI - Recoding Mechanisms in Infections.
+FRIED POTATO includes some improvements in the way results are exported as well as includes some additional paramateres such as change in contour lenght upon each step and total contour lenght of each curve.
 
-Supervisor - Jun. Prof. Neva Caliskan
+Another new feature is the option to use "Reverse fitting" during the analysis which is suitable for long RNA analysis, under the condition that the full unfolding of RNA has been reached.
 
 ![image](https://user-images.githubusercontent.com/59534208/141326704-f0ddbee2-1dd3-42bf-a5c1-c98e730bb05b.png)
 
@@ -25,12 +25,12 @@ Furthermore the script can analyse single constant force markers.
 
 The parameters can be changed in the GUI before each run.
 
-Alternatively they can be changed permanently in the POTATO_config file.
+Alternatively they can be changed permanently in the FRIED_POTATO_config file.
 
-To avoid issues with different python package versions, or to avoid setting up an appropriate environment, an executable POTATO version is available. 
+To avoid issues with different python package versions, or to avoid setting up an appropriate environment, an executable FRIED POTATO version is available. 
 
-For more detailed description please refer to: 
-https://doi.org/10.1016/j.bpj.2022.06.030
+For more detailed description please refer to the manuscript describing the original POTATO: 
+doi: https://doi.org/10.1101/2021.11.11.468103
 
 
 ***Dependencies***
@@ -54,12 +54,12 @@ Packages:
   time,
   tkinter
 
-There is also a standalone executable POTATO version for Windows available.
+There is also a standalone executable FRIED POTATO version for Windows available.
 
 
 ***Navigation***
 
-The POTATO GUI is structured in five tabs: "Folder Analysis", "Show Single File", "Constant Force Analysis", "Advanced Settings"and "TOMATO - Manual analysis".
+The FRIED POTATO GUI is structured in five tabs: "Folder Analysis", "Show Single File", "Constant Force Analysis", "Advanced Settings"and "TOMATO - Manual analysis".
 For each analysis step, buttons are displayed in the different tabs and some of them can also be found in the drop-down menu.
 
 ***Folder Analysis***
@@ -70,7 +70,7 @@ In this tab, all force ramp experimental files in the specified folder will be a
 
 **Input**
 
-POTATO supports three different input formats for folder analysis.
+FRIED POTATO supports three different input formats for folder analysis.
 The appropriate dataset has to be selected prior to the analysis.
 ATTENTION: When changing between input formats, all parameters are reset to the default values!
 
@@ -92,12 +92,12 @@ ATTENTION: When changing between input formats, all parameters are reset to the 
 
 Parameters can be changed directly in the Graphical User Interface (GUI).
 For more setting options refer to the "Advanced Settings" tab, which includes all adjustable parameters.
-When the parameters are optimized, default parameters can be changed in the POTATO_config file,
+When the parameters are optimized, default parameters can be changed in the FRIED_POTATO_config file,
 so they will be loaded when the GUI is started.
 The parameters are read in once the analysis starts and for the force-ramp analysis the used parameters are exported in json format.
 
 **Output**
-  POTATO creates an "Analysis" folder with timestamp in the analysed directory.
+  FRIED POTATO creates an "Analysis" folder with timestamp in the analysed directory.
 	The "Refresh" button loads the last saved image and displays the progress in the GUI.
 	In the "Advanced Settings" tab, several export settings can be set.
 
@@ -150,7 +150,7 @@ To guess the fitting parameters, they are entered from lowest to highest values,
 
 **Output**
   
-POTATO creates an "Analysis_constantF" folder with timestamp in the analysed directory.
+FRIED POTATO creates an "Analysis_constantF" folder with timestamp in the analysed directory.
 Both, the time-distance plot and the fitted histogram are exported as separate figures in PNG format.
 In addition, the smoothened values as well as the histogram distribution are exported into CSV files.
 Last, a table with values of the fitted parameters is exported in CSV format.
@@ -160,7 +160,7 @@ Last, a table with values of the fitted parameters is exported in CSV format.
   
 ![Tab4_new](https://user-images.githubusercontent.com/77443646/173436359-56f1a257-432f-4d47-826e-6b4efc288e10.PNG)
 
-This tab contains all the adjustable parameters in the POTATO.
+This tab contains all the adjustable parameters in the FRIED POTATO.
 The parameters are divided into several groups based on the part of analysis, in which they are used.
   
 **Preprocessing**
@@ -231,7 +231,7 @@ Fitting 		- Exports a plot with the fitted models and a table of the fitting par
   
 ![Tab5_new](https://user-images.githubusercontent.com/77443646/173436395-dca85422-a263-4aed-b87b-f18f7eec3aaf.PNG)
 
-This tab allows user to perform manual analysis of the FD curves. TOMATO uses the same input parameters as POTATO.
+This tab allows user to perform manual analysis of the FD curves. FRIED TOMATO uses the same input parameters as FRIED POTATO.
 1) Choose the folder containing the curves to analyse with the "Choose folder" button. Attention the file format and preprocessing values are set in the "Analysis folder" tab.
 	
 2) Manually mark the start and end of each (un)folding step: 
