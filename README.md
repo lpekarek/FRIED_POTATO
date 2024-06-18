@@ -6,7 +6,7 @@ FRIED POTATO includes some improvements in the way results are exported as well 
 
 Another new feature is the option to use "Reverse fitting" during the analysis which is suitable for long RNA analysis, under the condition that the full unfolding of RNA has been reached.
 
-![image](https://user-images.githubusercontent.com/59534208/141326704-f0ddbee2-1dd3-42bf-a5c1-c98e730bb05b.png)
+![FRIED POTATO](https://github.com/lpekarek/FRIED_POTATO/assets/59534208/05407fc0-f169-4a62-b842-3ba7ccd2fcfe)
 
 
 ***Description***
