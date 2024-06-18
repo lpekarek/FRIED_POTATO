@@ -1,8 +1,6 @@
 Welcome to FRIED POTATO - Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol 
 
-FRIED POTATO is an extension of the original POTATO (developed by Lukáš Pekárek and Stefan Buck under supervision of Neva Caliskan 
-
-at the Helmholtz Institute for RNA-based Infection Research (Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH)). 
+FRIED POTATO is an extension of the original [POTATO](https://github.com/REMI-HIRI/POTATO). 
 
 FRIED POTATO includes some improvements in the way results are exported as well as includes some additional paramateres such as change in contour lenght upon each step and total contour lenght of each curve.
 
