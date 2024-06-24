@@ -77,11 +77,14 @@ def start_analysis():
         output_window.see("end")
 
         # create a folder for the analysis results
-        analysis_folder = str(folder + '/Analysis_' + timestamp)
+        if input_format['reverse_fitting'] == 1:
+            analysis_folder = str(folder + '/Analysis_RF_' + timestamp)
+        else:
+            analysis_folder = str(folder + '/Analysis_' + timestamp) 
         os.mkdir(analysis_folder)
 
         # export configuration file with used parameters
-        export_settings(analysis_folder, timestamp, input_settings, input_fitting)
+        export_settings(analysis_folder, timestamp, input_settings, input_fitting, input_format)
 
         # start analysis in a new process
         p0 = mp.Process(target=start_subprocess, name='Process-0', args=(
@@ -169,14 +172,29 @@ def load_parameters():
     # Parse the parameters
     data_processing_start = lines.index("Data processing:\n")
     fitting_parameters_start = lines.index("Fitting parameters:\n")
+    try:
+        input_format_start = lines.index("Input format:\n")
+    except: 
+        #print('lines loading')
+        input_format_start=False
+        pass
 
     # Load Data processing parameters
     data_processing_lines = lines[data_processing_start + 1: fitting_parameters_start]
     default_values = json.loads(''.join(data_processing_lines).strip())
 
     # Load Fitting parameters
-    fitting_parameters_lines = lines[fitting_parameters_start + 1:]
+    if input_format_start!=False:
+        fitting_parameters_lines = lines[fitting_parameters_start + 1:input_format_start]
+    else:
+        fitting_parameters_lines = lines[fitting_parameters_start + 1:]
     default_fit = json.loads(''.join(fitting_parameters_lines).strip())
+
+    
+    #Load input format
+    if input_format_start!=False:
+        input_format_parameters_lines = lines[input_format_start + 1:]
+        default_input_format = json.loads(''.join(input_format_parameters_lines).strip())
 
     # Set the GUI variables based on the loaded parameters
     downsample_value.set(default_values['downsample_value'])
@@ -185,7 +203,11 @@ def load_parameters():
     Force_Min.set(default_values['F_min'])
     Z_score_force.set(default_values['z-score_f'])
     Z_score_distance.set(default_values['z-score_d'])
-    augment_factor_value.set(int(default_values['augment_factor']))
+    try:
+        augment_factor_value.set(int(default_values['augment_factor']))
+    except:
+        #print('augmentation factor')
+        pass
 
     step_d_variable.set(str(default_values['step_d']))
     window_size_variable.set(str(default_values['window_size']))
@@ -211,9 +233,38 @@ def load_parameters():
     d_off_variable.set(str(default_fit['offset_d']))
     d_off_up_variable.set(str(default_fit['offset_d_up']))
     d_off_low_variable.set(str(default_fit['offset_d_low']))
+    #print(input_format_start)
 
+    if input_format_start!=False:
+        check_box_HF.set(str(default_input_format['HF']))
+        check_box_LF.set(str(default_input_format['LF']))
+        check_box_CSV.set(str(default_input_format['CSV']))
+        try:
+            check_box_augment.set(str(default_input_format['Augment']))
+        except:
+            #print('augmentation')
+            pass
 
+        if str(default_input_format['Trap'])=='1':
+            check_box_Trap1.set('1')
+            check_box_Trap2.set('0')
+        else: 
+            check_box_Trap1.set('0')
+            check_box_Trap2.set('1')
 
+        if str(default_input_format['length_measure'])=='1':
+            check_box_um.set('1')
+            check_box_nm.set('0')
+        else: 
+            check_box_um.set('0')
+            check_box_nm.set('1')
+        check_box_multiH5.set(str(default_input_format['MultiH5']))
+        check_box_preprocess.set(str(default_input_format['preprocess']))
+        try:
+            check_box_reverse_fitting.set(str(default_input_format['reverse_fitting']))
+        except:
+            #print('reverse fitting')
+            pass
 
 
 
@@ -293,14 +344,16 @@ def check_settings():
 
 
 # export parameters used for the analysis in a txt file
-def export_settings(analysis_path, timestamp, input_1, input_2):
+def export_settings(analysis_path, timestamp, input_1, input_2, input_3):
     with open(str(analysis_path + '/parameters_' + timestamp + '.txt'), 'w') as config_used:
         config_used.write('Data processing:\n')
         config_used.write(json.dumps(input_1, indent=4, sort_keys=False))
         config_used.write('\n\n')
         config_used.write('Fitting parameters:\n')
         config_used.write(json.dumps(input_2, indent=4, sort_keys=False))
-
+        config_used.write('\n\n')
+        config_used.write('Input format:\n')
+        config_used.write(json.dumps(input_3, indent=4, sort_keys=False))
 
 # Looks for output of the subprocess
 def refresh():
