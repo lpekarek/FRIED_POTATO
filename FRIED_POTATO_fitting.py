@@ -1,4 +1,4 @@
-"""Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH"""
+"""FRIED POTATO -- 2024 -- Version 1"""
 
 import matplotlib.pyplot as plt
 import lumicks.pylake as lk

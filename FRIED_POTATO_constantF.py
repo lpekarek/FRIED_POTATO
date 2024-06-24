@@ -1,4 +1,4 @@
-"""Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH"""
+"""FRIED POTATO -- 2024 -- Version 1"""
 
 from tkinter import filedialog
 import matplotlib.pyplot as plt

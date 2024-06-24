@@ -7,7 +7,7 @@ FRIED POTATO is an extension of the original POTATO (developed by Lukáš Pekár
 at the Helmholtz Institute for RNA-based Infection Research (Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH)). 
 
 
-FRIED POTATO includes some improvements in the way results are exported as well as includes some additional paramateres such as change in contour lenght upon each step and total contour lenght of each curve.
+FRIED POTATO includes some improvements in the way results are exported as well as includes some additional paramateres such as change in contour length upon each step and total contour length of each curve.
 
 Another new feature is the option to use "Reverse fitting" during the analysis which is suitable for long RNA analysis, under the condition that the full unfolding of RNA has been reached.
 
