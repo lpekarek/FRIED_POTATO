@@ -119,8 +119,8 @@ def fitting_FU(filename_i, input_settings, export_data, input_fitting, first_ste
         start_step1 = np.where(derivative_array[:, 1] == first_step_start)
         start_step1 = start_step1[0][0]
 
-        raw_f_fitting_region_low = Force_Distance[0:int(len(F_low)/2), 0]
-        raw_d_fitting_region_low = Force_Distance[0:int(len(F_low)/2), 1]
+        raw_f_fitting_region_low = Force_Distance[0:int(len(F_low)/3), 0]
+        raw_d_fitting_region_low = Force_Distance[0:int(len(F_low)/3), 1]
 
         #find end of the last step
         start_fitting_region = np.where(derivative_array[:, 1] == i_start)
@@ -133,8 +133,8 @@ def fitting_FU(filename_i, input_settings, export_data, input_fitting, first_ste
 
     elif TOMATO_param == 1:
         start_step1 = find_nearest(Force_Distance[:, 1], i_start)
-        raw_f_fitting_region_low = Force_Distance[0:(int(start_step1/2)), 0]
-        raw_d_fitting_region_low = Force_Distance[0:(int(start_step1/2)), 1]
+        raw_f_fitting_region_low = Force_Distance[0:(int(start_step1/3)), 0]
+        raw_d_fitting_region_low = Force_Distance[0:(int(start_step1/3)), 1]
 
         start_fitting_region = find_nearest(Force_Distance[:, 1], i_start)
         end_fitting_region = find_nearest(Force_Distance[:, 1], i_end)
