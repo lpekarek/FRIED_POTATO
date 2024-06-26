@@ -4,13 +4,13 @@ from scipy import signal
 import numpy as np
 
 
-def preprocess_RAW(Force, Distance, input_settings, input_format):
+def preprocess_RAW(Force, Distance, input_text, input_checkbox):
 
-    if input_format['Augment'] == 1 and input_settings['augment_factor'] != '':
+    if input_checkbox['aug'] == 1 and input_text['augment_factor'] != '':
         # Augment data
         new_f = []
         new_d = []
-        factor = int(input_settings['augment_factor'])
+        factor = int(input_text['augment_factor'])
 
         for line in range(len(Force) - 1):
             f = Force[line]
@@ -36,13 +36,13 @@ def preprocess_RAW(Force, Distance, input_settings, input_format):
         Force = np.array(new_f)
         Distance = np.array(new_d)
 
-    if input_format['preprocess'] == 1:
+    if input_checkbox['prepro'] == 1:
         # Downsample
-        Force_ds = Force[::input_settings['downsample_value']]
-        Distance_ds = Distance[::input_settings['downsample_value']]
+        Force_ds = Force[::input_text['downsample']]
+        Distance_ds = Distance[::input_text['downsample']]
 
         # Filter
-        b, a = signal.butter(input_settings['filter_degree'], input_settings['filter_cut_off'])
+        b, a = signal.butter(input_text['filter_degree'], input_text['filter_cut_off'])
         filteredForce = signal.filtfilt(b, a, Force_ds)
         filteredDistance = signal.filtfilt(b, a, Distance_ds)
 
@@ -80,31 +80,31 @@ def trim_data(FD_data, F_min):
 
 
 # creates derivatives for Force and Distance of the trimmed datasets
-def create_derivative(input_settings, Frequency_value, F_trimmed, PD_trimmed, F_low):
-    d_time = 1 / Frequency_value * input_settings['downsample_value'] * input_settings['step_d']
+def create_derivative(input_text, Frequency_value, F_trimmed, PD_trimmed, F_low):
+    d_time = 1 / Frequency_value * input_text['downsample'] * input_text['step_d']
 
-    x = input_settings['step_d']
+    x = input_text['step_d']
 
     derivative_list = []
 
     while x < len(F_trimmed):
         if PD_trimmed[0] < PD_trimmed[-1]:
-            F_value = (F_trimmed[x] + F_trimmed[x - input_settings['step_d']]) / 2
-            PD_value = (PD_trimmed[x] + PD_trimmed[x - input_settings['step_d']]) / 2
-            delta_PD = PD_trimmed[x] - PD_trimmed[x - input_settings['step_d']]
-            delta_F = F_trimmed[x] - F_trimmed[x - input_settings['step_d']]
+            F_value = (F_trimmed[x] + F_trimmed[x - input_text['step_d']]) / 2
+            PD_value = (PD_trimmed[x] + PD_trimmed[x - input_text['step_d']]) / 2
+            delta_PD = PD_trimmed[x] - PD_trimmed[x - input_text['step_d']]
+            delta_F = F_trimmed[x] - F_trimmed[x - input_text['step_d']]
             F_dt = delta_F / d_time
             PD_dt = delta_PD / d_time
         else:
-            F_value = (F_trimmed[x] + F_trimmed[(x - input_settings['step_d'])]) / 2
-            PD_value = (PD_trimmed[x] + PD_trimmed[(x - input_settings['step_d'])]) / 2
-            delta_PD = PD_trimmed[x] - PD_trimmed[(x - input_settings['step_d'])]
-            delta_F = F_trimmed[x] - F_trimmed[(x - input_settings['step_d'])]
+            F_value = (F_trimmed[x] + F_trimmed[(x - input_text['step_d'])]) / 2
+            PD_value = (PD_trimmed[x] + PD_trimmed[(x - input_text['step_d'])]) / 2
+            delta_PD = PD_trimmed[x] - PD_trimmed[(x - input_text['step_d'])]
+            delta_F = F_trimmed[x] - F_trimmed[(x - input_text['step_d'])]
             F_dt = (delta_F / d_time) * (-1)
             PD_dt = (delta_PD / d_time) * (-1)
 
         derivative_list.append([F_value, PD_value, F_dt, PD_dt])
-        x = x + input_settings['step_d']
+        x = x + input_text['step_d']
 
     derivative_array = np.array(derivative_list)
 

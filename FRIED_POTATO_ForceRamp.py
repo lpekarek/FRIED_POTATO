@@ -4,7 +4,6 @@ import pandas as pd
 import h5py
 import numpy as np
 from pathlib import Path
-import lumicks.pylake as lk
 import traceback
 
 # relative imports
@@ -17,26 +16,20 @@ from FRIED_POTATO_processMultiH5 import split_H5
 """define the functions of the subprocess processing the data"""
 
 
-def show_h5_structure(file_path):
-    file_h5 = lk.File(file_path)
-
-    return file_h5
-
-
-def read_in_data(file_num, Files, input_settings, input_format):
-    if input_format['CSV'] == 1:
+def read_in_data(file_num, Files, input_text, input_checkbox):
+    if input_checkbox['CSV'] == 1:
         df = pd.read_csv(Files[file_num])
         directory_i = Path(Files[file_num])
         filename_i = directory_i.name[:-4]
         # access the raw data
         Force = df.to_numpy()[:, 0]
-        if input_format['length_measure'] == 1:
+        if input_checkbox['length_measure'] == 1:
             Distance = df.to_numpy()[:, 1]
         else:
             Distance = df.to_numpy()[:, 1] / 1000
         # accessing the data frequency from user input
-        Frequency_value = input_settings['data_frequency']  
-        Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+        Frequency_value = input_text['frequency']  
+        Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
 
     else:
         with h5py.File(Files[file_num], "r") as f:
@@ -44,18 +37,18 @@ def read_in_data(file_num, Files, input_settings, input_format):
             filename_i = directory_i.name[:-3]
 
             # access the raw data
-            if input_format['HF'] == 1:
-                if input_format['Trap'] == 1:
+            if input_checkbox['HF'] == 1:
+                if input_checkbox['1x'] == 1:
                     Force = f.get("Force HF/Force 1x")
-                elif input_format['Trap'] == 0:
+                elif input_checkbox['2x'] == 1:
                     Force = f.get("Force HF/Force 2x")
                 Distance = f.get("Distance/Piezo Distance")
                 # accessing the data frequency from the h5 file
                 Frequency_value = Force.attrs['Sample rate (Hz)']
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
 
-            elif input_format['LF'] == 1:
-                if input_format['Trap'] == 1:
+            elif input_checkbox['LF'] == 1:
+                if input_checkbox['1x'] == 1:
                     load_force = f.get("Force LF/Force 1x")
                     Force = load_force[:]['Value'][:]
                     try:
@@ -63,7 +56,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
                     except:
                         load_distance = f.get("Distance/Distance 2")[:]
                     Distance = load_distance['Value'][:]
-                elif input_format['Trap'] == 0:
+                elif input_checkbox['2x'] == 1:
                     load_force = f.get("Force LF/Force 2x")
                     Force = load_force[:]['Value'][:]
                     try:
@@ -72,7 +65,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
                         load_distance = f.get("Distance/Distance 1")[:]
                     Distance = load_distance['Value'][:]
 
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
 
                 # calculating the data frequency based on start- and end-time of the measurement
                 size_F_LF = len(Force)

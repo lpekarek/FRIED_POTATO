@@ -22,6 +22,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolb
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 from tkinter import ttk
+import lumicks.pylake as lk
 from PIL import ImageTk, Image
 import pandas as pd
 import numpy as np
@@ -32,7 +33,7 @@ import multiprocessing as mp
 import json
 
 # relative imports
-from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data, show_h5_structure
+from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data
 from FRIED_POTATO_preprocessing import create_derivative
 from FRIED_POTATO_config import default_values_HF, default_values_LF, default_values_CSV, default_values_FIT, default_values_constantF
 from FRIED_POTATO_constantF import get_constantF, display_constantF, fit_constantF
@@ -50,117 +51,117 @@ errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
 
 # get settings, get folder directory, create analysis results folder
-def start_analysis():
-    global p0
-    global analysis_folder
+# def start_analysis():
+#     global p0
+#     global analysis_folder
 
-    # check user input
-    input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
+#     # check user input
+#     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
-    # ask wich directory should be analysed
-    folder = tk.filedialog.askdirectory()
-    root.title('FRIED POTATO -- ' + str(folder))
+#     # ask wich directory should be analysed
+#     folder = tk.filedialog.askdirectory()
+#     root.title('FRIED POTATO -- ' + str(folder))
 
-    # decide which input format was choosen
-    if input_format['CSV'] == 1:
-        folder_path = str(folder + "/*.csv")
-    else:
-        folder_path = str(folder + "/*.h5")
+#     # decide which input format was choosen
+#     if input_format['CSV'] == 1:
+#         folder_path = str(folder + "/*.csv")
+#     else:
+#         folder_path = str(folder + "/*.h5")
 
-    Files = glob.glob(folder_path)
+#     Files = glob.glob(folder_path)
 
-    # print number of files to analyse, if no files found give an error
-    print('Files to analyse', len(Files))
-    output_window.insert("end", 'Files to analyse: ' + str(len(Files)) + "\n")
-    output_window.see("end")
-    if not len(Files) == 0:
-        output_window.insert("end", 'Analysis in progress. Please do not close the program! \n')
+#     # print number of files to analyse, if no files found give an error
+#     print('Files to analyse', len(Files))
+#     output_window.insert("end", 'Files to analyse: ' + str(len(Files)) + "\n")
+#     output_window.see("end")
+#     if not len(Files) == 0:
+#         output_window.insert("end", 'Analysis in progress. Please do not close the program! \n')
 
-        # print starting time of the analysis
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        print("Timestamp: " + timestamp)
-        output_window.insert("end", 'Start of analysis: ' + str(timestamp) + "\n")
-        output_window.see("end")
+#         # print starting time of the analysis
+#         timestamp = time.strftime("%Y%m%d-%H%M%S")
+#         print("Timestamp: " + timestamp)
+#         output_window.insert("end", 'Start of analysis: ' + str(timestamp) + "\n")
+#         output_window.see("end")
 
-        # create a folder for the analysis results
-        analysis_folder = str(folder + '/Analysis_' + timestamp)
-        os.mkdir(analysis_folder)
+#         # create a folder for the analysis results
+#         analysis_folder = str(folder + '/Analysis_' + timestamp)
+#         os.mkdir(analysis_folder)
 
-        # export configuration file with used parameters
-        export_settings(analysis_folder, timestamp, input_settings, input_fitting)
+#         # export configuration file with used parameters
+#         export_settings(analysis_folder, timestamp, input_settings, input_fitting)
 
-        # start analysis in a new process
-        p0 = mp.Process(target=start_subprocess, name='Process-0', args=(
-            analysis_folder,
-            timestamp,
-            Files,
-            input_settings,
-            input_format,
-            export_data,
-            input_fitting,
-            output_q,
-        ))
+#         # start analysis in a new process
+#         p0 = mp.Process(target=start_subprocess, name='Process-0', args=(
+#             analysis_folder,
+#             timestamp,
+#             Files,
+#             input_settings,
+#             input_format,
+#             export_data,
+#             input_fitting,
+#             output_q,
+#         ))
 
-        p0.daemon = True
-        p0.start()
+#         p0.daemon = True
+#         p0.start()
 
-    else:
-        output_window.insert("end", 'No file of the selected data type in the folder! \n')
-        output_window.see("end")
+#     else:
+#         output_window.insert("end", 'No file of the selected data type in the folder! \n')
+#         output_window.see("end")
 
 
 # display default values in the GUI
-def parameters(default_values, default_fit, default_constantF):
-    if not default_values == 0:
-        downsample_value.set(default_values['Downsampling rate'])
-        Filter_degree.set(default_values['Butterworth filter degree'])
-        Filter_cut_off.set(default_values['Cut-off frequency'])
-        Force_Min.set(default_values['Force threshold, pN'])
-        Z_score_force.set(default_values['Z-score force'])
-        Z_score_distance.set(default_values['Z-score distance'])
-        augment_factor_value.set(2)
+# def parameters(default_values, default_fit, default_constantF):
+#     if not default_values == 0:
+#         downsample_value.set(default_values['Downsampling rate'])
+#         Filter_degree.set(default_values['Butterworth filter degree'])
+#         Filter_cut_off.set(default_values['Cut-off frequency'])
+#         Force_Min.set(default_values['Force threshold, pN'])
+#         Z_score_force.set(default_values['Z-score force'])
+#         Z_score_distance.set(default_values['Z-score distance'])
+#         augment_factor_value.set(2)
 
-        step_d_variable.set(str(default_values['Step d']))
-        window_size_variable.set(str(default_values['Moving median window size']))
-        STD_difference_variable.set(str(default_values['STD difference threshold']))
-        Frequency_variable.set(str(default_values['Data frequency, Hz']))
+#         step_d_variable.set(str(default_values['Step d']))
+#         window_size_variable.set(str(default_values['Moving median window size']))
+#         STD_difference_variable.set(str(default_values['STD difference threshold']))
+#         Frequency_variable.set(str(default_values['Data frequency, Hz']))
 
-    dsLp_variable.set(str(default_fit['Persistance-Length ds, nm']))
-    dsLp_up_variable.set(str(default_fit['Persistance-Length ds, upper bound, nm']))
-    dsLp_low_variable.set(str(default_fit['Persistance-Length ds, lower bound, nm']))
-    ssLp_variable.set(str(default_fit['Persistance-Length ss, nm']))
-    dsLc_variable.set(str(default_fit['Contour-Length ds, nm']))
-    ssLc_variable.set(str(default_fit['Contour-Length ss, nm']))
-    ssLc_up_variable.set(str(default_fit['Contour-Length ss, upper bound, nm']))
-    stiff_ds_variable.set(str(default_fit['Stiffness ds, pN']))
-    stiff_ds_up_variable.set(str(default_fit['Stiffness ds, upper bound, pN']))
-    stiff_ds_low_variable.set(str(default_fit['Stiffness ds, lower bound, pN']))
-    stiff_ss_variable.set(str(default_fit['Stiffness ss, pN']))
-    stiff_ss_up_variable.set(str(default_fit['Stiffness ss, upper bound, pN']))
-    stiff_ss_low_variable.set(str(default_fit['Stiffness ss, lower bound, pN']))
-    f_off_variable.set(str(default_fit['Force offset, pN']))
-    f_off_up_variable.set(str(default_fit['Force offset, upper bound, pN']))
-    f_off_low_variable.set(str(default_fit['Force offset, lower bound, pN']))
-    d_off_variable.set(str(default_fit['Distance offset, nm']))
-    d_off_up_variable.set(str(default_fit['Distance offset, upper bound, nm']))
-    d_off_low_variable.set(str(default_fit['Distance offset, lower bound, nm']))
+#     dsLp_variable.set(str(default_fit['Persistance-Length ds, nm']))
+#     dsLp_up_variable.set(str(default_fit['Persistance-Length ds, upper bound, nm']))
+#     dsLp_low_variable.set(str(default_fit['Persistance-Length ds, lower bound, nm']))
+#     ssLp_variable.set(str(default_fit['Persistance-Length ss, nm']))
+#     dsLc_variable.set(str(default_fit['Contour-Length ds, nm']))
+#     ssLc_variable.set(str(default_fit['Contour-Length ss, nm']))
+#     ssLc_up_variable.set(str(default_fit['Contour-Length ss, upper bound, nm']))
+#     stiff_ds_variable.set(str(default_fit['Stiffness ds, pN']))
+#     stiff_ds_up_variable.set(str(default_fit['Stiffness ds, upper bound, pN']))
+#     stiff_ds_low_variable.set(str(default_fit['Stiffness ds, lower bound, pN']))
+#     stiff_ss_variable.set(str(default_fit['Stiffness ss, pN']))
+#     stiff_ss_up_variable.set(str(default_fit['Stiffness ss, upper bound, pN']))
+#     stiff_ss_low_variable.set(str(default_fit['Stiffness ss, lower bound, pN']))
+#     f_off_variable.set(str(default_fit['Force offset, pN']))
+#     f_off_up_variable.set(str(default_fit['Force offset, upper bound, pN']))
+#     f_off_low_variable.set(str(default_fit['Force offset, lower bound, pN']))
+#     d_off_variable.set(str(default_fit['Distance offset, nm']))
+#     d_off_up_variable.set(str(default_fit['Distance offset, upper bound, nm']))
+#     d_off_low_variable.set(str(default_fit['Distance offset, lower bound, nm']))
 
-    x_min.delete(0, "end")
-    x_min.insert("end", str(default_constantF['x min']))
-    x_max.delete(0, "end")
-    x_max.insert("end", str(default_constantF['x max']))
-    y_min.delete(0, "end")
-    y_min.insert("end", str(default_constantF['y min']))
-    y_max.delete(0, "end")
-    y_max.insert("end", str(default_constantF['y max']))
-    number_gauss.delete(0, "end")
-    number_gauss.insert("end", str(default_constantF['Number gauss']))
-    mean_gauss.delete(0, "end")
-    mean_gauss.insert("end", str(default_constantF['Mean']))
-    STD_gauss.delete(0, "end")
-    STD_gauss.insert("end", str(default_constantF['STD']))
-    amplitude_gauss.delete(0, "end")
-    amplitude_gauss.insert("end", str(default_constantF['Amplitude']))
+#     x_min.delete(0, "end")
+#     x_min.insert("end", str(default_constantF['x min']))
+#     x_max.delete(0, "end")
+#     x_max.insert("end", str(default_constantF['x max']))
+#     y_min.delete(0, "end")
+#     y_min.insert("end", str(default_constantF['y min']))
+#     y_max.delete(0, "end")
+#     y_max.insert("end", str(default_constantF['y max']))
+#     number_gauss.delete(0, "end")
+#     number_gauss.insert("end", str(default_constantF['Number gauss']))
+#     mean_gauss.delete(0, "end")
+#     mean_gauss.insert("end", str(default_constantF['Mean']))
+#     STD_gauss.delete(0, "end")
+#     STD_gauss.insert("end", str(default_constantF['STD']))
+#     amplitude_gauss.delete(0, "end")
+#     amplitude_gauss.insert("end", str(default_constantF['Amplitude']))
 
 def load_parameters():
     import_file_path = tk.filedialog.askopenfilename()  
@@ -225,77 +226,77 @@ def load_parameters():
 
 
 # get all settings from the user input before start of the analysis
-def check_settings():
-    input_settings = {
-        'downsample_value': int(downsample_value2.get()),
-        'filter_degree': int(Filter_degree2.get()),
-        'filter_cut_off': float(Filter_cut_off2.get()),
-        'F_min': float(Force_Min2.get()),
-        'step_d': int(step_d_value.get()),
-        'z-score_f': float(Z_score_force2.get()),
-        'z-score_d': float(Z_score_distance2.get()),
-        'window_size': int(window_size_value.get()),
-        'data_frequency': float(Frequency_value.get()),
-        'STD_diff': float(STD_difference_value.get()),
-        'augment_factor': augment_factor_value.get()
-    }
+# def check_settings():
+#     input_settings = {
+#         'downsample_value': int(downsample_value2.get()),
+#         'filter_degree': int(Filter_degree2.get()),
+#         'filter_cut_off': float(Filter_cut_off2.get()),
+#         'F_min': float(Force_Min2.get()),
+#         'step_d': int(step_d_value.get()),
+#         'z-score_f': float(Z_score_force2.get()),
+#         'z-score_d': float(Z_score_distance2.get()),
+#         'window_size': int(window_size_value.get()),
+#         'data_frequency': float(Frequency_value.get()),
+#         'STD_diff': float(STD_difference_value.get()),
+#         'augment_factor': augment_factor_value.get()
+#     }
 
-    input_format = {
-        'HF': check_box_HF.get(),
-        'LF': check_box_LF.get(),
-        'CSV': check_box_CSV.get(),
-        'Augment': check_box_augment.get(),
-        'Trap': check_box_Trap1.get(),
-        'length_measure': check_box_um.get(),
-        'MultiH5': check_box_multiH5.get(),
-        'preprocess': check_box_preprocess.get(),
-        'reverse_fitting':check_box_reverse_fitting.get()
-    }
+#     input_format = {
+#         'HF': check_box_HF.get(),
+#         'LF': check_box_LF.get(),
+#         'CSV': check_box_CSV.get(),
+#         'Augment': check_box_augment.get(),
+#         'Trap': check_box_Trap1.get(),
+#         'length_measure': check_box_um.get(),
+#         'MultiH5': check_box_multiH5.get(),
+#         'preprocess': check_box_preprocess.get(),
+#         'reverse_fitting':check_box_reverse_fitting.get()
+#     }
 
-    export_data = {
-        'export_SMOOTH': check_box_smooth_data.get(),
-        'export_PLOT': check_box_plot.get(),
-        'export_STEPS': check_box_steps.get(),
-        'export_TOTAL': check_box_total_results.get(),
-        'export_FIT': check_box_fitting.get()
-    }
+#     export_data = {
+#         'export_SMOOTH': check_box_smooth_data.get(),
+#         'export_PLOT': check_box_plot.get(),
+#         'export_STEPS': check_box_steps.get(),
+#         'export_TOTAL': check_box_total_results.get(),
+#         'export_FIT': check_box_fitting.get()
+#     }
 
-    input_fitting = {
-        'WLC+WLC': int(check_box_WLC.get()),
-        'WLC+FJC': int(check_box_FJC.get()),
-        'lp_ds': float(dsLp.get()),
-        'lp_ds_up': float(dsLp_up.get()),
-        'lp_ds_low': float(dsLp_low.get()),
-        'lc_ds': float(dsLc.get()),
-        'lp_ss': float(ssLp.get()),
-        'lc_ss': float(ssLc.get()),
-        'lc_ss_up': float(ssLc_up.get()),
-        'ds_stiff': float(stiff_ds.get()),
-        'ds_stiff_up': float(stiff_ds_up.get()),
-        'ds_stiff_low': float(stiff_ds_low.get()),
-        'ss_stiff': float(stiff_ss.get()),
-        'ss_stiff_up': float(stiff_ss_up.get()),
-        'ss_stiff_low': float(stiff_ss_low.get()),
-        'offset_f': float(f_off.get()),
-        'offset_f_up': float(f_off_up.get()),
-        'offset_f_low': float(f_off_low.get()),
-        'offset_d': float(d_off.get()),
-        'offset_d_up': float(d_off_up.get()),
-        'offset_d_low': float(d_off_low.get())
-    }
+#     input_fitting = {
+#         'WLC+WLC': int(check_box_WLC.get()),
+#         'WLC+FJC': int(check_box_FJC.get()),
+#         'lp_ds': float(dsLp.get()),
+#         'lp_ds_up': float(dsLp_up.get()),
+#         'lp_ds_low': float(dsLp_low.get()),
+#         'lc_ds': float(dsLc.get()),
+#         'lp_ss': float(ssLp.get()),
+#         'lc_ss': float(ssLc.get()),
+#         'lc_ss_up': float(ssLc_up.get()),
+#         'ds_stiff': float(stiff_ds.get()),
+#         'ds_stiff_up': float(stiff_ds_up.get()),
+#         'ds_stiff_low': float(stiff_ds_low.get()),
+#         'ss_stiff': float(stiff_ss.get()),
+#         'ss_stiff_up': float(stiff_ss_up.get()),
+#         'ss_stiff_low': float(stiff_ss_low.get()),
+#         'offset_f': float(f_off.get()),
+#         'offset_f_up': float(f_off_up.get()),
+#         'offset_f_low': float(f_off_low.get()),
+#         'offset_d': float(d_off.get()),
+#         'offset_d_up': float(d_off_up.get()),
+#         'offset_d_low': float(d_off_low.get())
+#     }
 
-    input_constantF = {
-        'x min': int(x_min.get()),
-        'x max': int(x_max.get()),
-        'y min': int(y_min.get()),
-        'y max': int(y_max.get()),
-        'Number gauss': int(number_gauss.get()),
-        'Mean': mean_gauss.get(),
-        'STD': STD_gauss.get(),
-        'Amplitude': amplitude_gauss.get()
-    }
+#     input_constantF = {
+#         'x min': int(x_min.get()),
+#         'x max': int(x_max.get()),
+#         'y min': int(y_min.get()),
+#         'y max': int(y_max.get()),
+#         'Number gauss': int(number_gauss.get()),
+#         'Mean': mean_gauss.get(),
+#         'STD': STD_gauss.get(),
+#         'Amplitude': amplitude_gauss.get()
+#     }
 
-    return input_settings, input_format, export_data, input_fitting, input_constantF
+#     return input_settings, input_format, export_data, input_fitting, input_constantF
 
 
 # export parameters used for the analysis in a txt file
@@ -362,20 +363,6 @@ def readme():
 #             parameters(default_values_CSV, default_values_FIT, default_values_constantF)
 #         else:
 #             pass
-
-
-def show_h5():
-    import_file_path = tk.filedialog.askopenfilename()
-    h5_structure = show_h5_structure(import_file_path)
-    h5_structure_window = tk.Toplevel(root)
-    h5_structure_window.title("H5 structure")
-
-    text = tk.Text(h5_structure_window, height=50, width=200)
-    scroll_bar = tk.Scrollbar(h5_structure_window, command=text.yview)
-    scroll_bar.pack(side=tk.RIGHT, fill=tk.Y)
-    text['yscrollcommand'] = scroll_bar.set
-    text.pack(side=tk.LEFT, fill=tk.Y)
-    text.insert("end", h5_structure)
 
 
 # create the plot for tab2
@@ -888,13 +875,13 @@ def tab_bind(event=None):
 
 ############## TOMATO functions end ###################
 
-
-""" start the main process and Tkinter application """
+"""class defining the tkinter GUI"""
 class FriedPotatoGUI:
     def __init__(self):
         # create the main window
         mp.freeze_support()
         self.root = tk.Tk()
+        self.root.minsize(1300, 800)
         self.root.iconbitmap('FRIED_POTATO.ico')
         self.root.title("FRIED POTATO -- Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -906,6 +893,10 @@ class FriedPotatoGUI:
         self.checkboxes = {}
         self.checkbox_vars = {}
 
+        # Initialize text input fields and their variables as dictionaries to store text input objects and their state variables
+        self.text_input = {}
+        self.text_input_vars = {}
+    
         # setup the drop-down menus and the different tabs
         self.setup_menus()
         self.setup_tabs()
@@ -924,6 +915,12 @@ class FriedPotatoGUI:
         # specific layout for the main tab
         self.layout_tab_main()
         self.layout_tab_display_curve()
+        self.layout_tab_settings()
+        self.layout_tab_constant_force()
+        self.layout_tab_TOMATO()
+
+        # put default values into the widgets
+        self.parameters(default_values_HF, default_values_FIT, default_values_constantF)
 
 
     def setup_menus(self):
@@ -954,7 +951,7 @@ class FriedPotatoGUI:
 
     def display_text_output(self):
         # Create a scrollable output window
-        self.output_window = tk.Text(self.root, height=6, width=115)
+        self.output_window = tk.Text(self.root, height=10, width=115)
         self.output_window.grid(row=0, column=0, sticky="nsew")
     
         # Create a scrollbar
@@ -973,28 +970,16 @@ class FriedPotatoGUI:
         self.output_window.config(state="disabled")  # Make the window read-only
 
         # add a refresh button to the output window
-        refresh_button = tk.Button(
-            self.root,
-            text='Refresh',
-            command=refresh,
-            bg='#df4c4c',
-            activebackground='#eaa90d',
-            font='Helvetica 7 bold',
-            height=3,
-            width=6,
-            cursor="exchange"
-        )
-
-        refresh_button.grid(row=0, column=2, padx=5)
+        self.create_button('Refresh', self.root, self.refresh, 0, 2, 5, 2, 3, 6, cursor="exchange")
 
 
     def setup_tabs(self):
-        style = ttk.Style()
+        self.style = ttk.Style()
 
         mybackground = "#b5b8b5"
         myforeground = "#8c888c"
 
-        style.theme_create("fried", parent="alt", settings={
+        self.style.theme_create("fried", parent="alt", settings={
             "TNotebook": {"configure": {"tabmargins": [2, 5, 2, 0] }},
             "TNotebook.Tab": {
                 "configure": {"padding": [5, 1], "background": mybackground},
@@ -1003,7 +988,7 @@ class FriedPotatoGUI:
             }
         })
 
-        style.theme_use("fried")
+        self.style.theme_use("fried")
 
         self.tabControl = ttk.Notebook(self.root)
         self.tabControl.grid(row=1, column=0, padx=2, pady=2, columnspan=3, sticky='nsew')
@@ -1026,7 +1011,7 @@ class FriedPotatoGUI:
 
     def divide_tab(self, tab, tab_name):
         """ divide the tab into frames """
-        output_frame = tk.Canvas(tab, height=650, width=1000, borderwidth=1)
+        output_frame = tk.Canvas(tab, height=550, width=800, borderwidth=1)
 
         output_frame.grid(row=0, column=0, sticky="nsew")
         tab.grid_columnconfigure(0, weight=1)  # Make the column expandable
@@ -1066,9 +1051,8 @@ class FriedPotatoGUI:
         cluster_handling = tk.Label(check_box_frame, text='HANDLING', font='Helvetica 9 bold')
         cluster_handling.grid(row=4, column=0, padx=2, pady=(10, 2), sticky='W')
 
-        self.create_check_box("aug", check_box_frame, "Data Augmentation", 0, lambda: show_augment(), 5, 0, 0)
-        self.create_check_box("multi", check_box_frame, "MultiH5", 0, None, 6, 0, 0)
-        self.create_check_box("rev", check_box_frame, "Reverse Fitting", 0, None, 7, 0, 0)
+        self.create_check_box("multi", check_box_frame, "MultiH5", 0, None, 5, 0, 0)
+        self.create_check_box("rev", check_box_frame, "Reverse Fitting", 0, None, 6, 0, 0)
 
         # check boxes to specify the data location
         cluster_data_location = tk.Label(check_box_frame, text='DATA LOCATION', font='Helvetica 9 bold')
@@ -1089,89 +1073,25 @@ class FriedPotatoGUI:
         parameter_frame = tk.Frame(input_frame)
         parameter_frame.grid(row=1, column=0, sticky='NE')
 
-        Cluster_preprocessing = tk.Label(parameter_frame, text='PREPROCESSING', font='Helvetica 9 bold')
+        cluster_preprocessing = tk.Label(parameter_frame, text='PREPROCESSING', font='Helvetica 9 bold')
+        cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
         self.create_check_box("prepro", parameter_frame, "Preprocessing", 1, None, 0, 1, (20, 2))
+        self.create_text_input("downsample", parameter_frame, 'Downsampling rate', 1, 0, 2, 2)
+        self.create_text_input("filter_degree", parameter_frame, 'Butterworth filter degree', 2, 0, 2, 2)
+        self.create_text_input("filter_cut_off", parameter_frame, 'Cut-off frequency', 3, 0, 2, 2)
+        self.create_text_input("force_min", parameter_frame, 'Force threshold, pN', 4, 0, 2, 2)
 
-        Label_downsample = tk.Label(parameter_frame, text='Downsampling rate')
-        Label_Filter1 = tk.Label(parameter_frame, text='Butterworth filter degree')
-        Label_Filter2 = tk.Label(parameter_frame, text='Cut-off frequency')
-        Label_ForceMin = tk.Label(parameter_frame, text='Force threshold, pN')
-        Cluster_statistics = tk.Label(parameter_frame, text='STATISTICS', font='Helvetica 9 bold')
-        Label_Zscore_F = tk.Label(parameter_frame, text='Z-score force')
-        Label_Zscore_D = tk.Label(parameter_frame, text='Z-score distance')
+        cluster_statistics = tk.Label(parameter_frame, text='STATISTICS', font='Helvetica 9 bold')
+        cluster_statistics.grid(row=5, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("z_score_force", parameter_frame, 'Z-score force', 6, 0, 2, 2)
+        self.create_text_input("z_score_distance", parameter_frame, 'Z-score distance', 7, 0, 2, 2)
 
-        Cluster_augment = tk.Label(parameter_frame, text='AUGMENTATION', font='Helvetica 9 bold')
-        Label_augment_factor = tk.Label(parameter_frame, text='Augmentation factor')
-        augment_factor_value = tk.StringVar()
-        augment_factor_entry = tk.Entry(parameter_frame, textvariable=augment_factor_value)
+        cluster_augment = tk.Label(parameter_frame, text='AUGMENTATION', font='Helvetica 9 bold')
+        cluster_augment.grid(row=8, column=0, padx=2, pady=(20, 2))
+        self.create_check_box("aug", parameter_frame, "Data Augmentation", 0, None, 8, 1, (20, 2))
+        self.create_text_input("augment_factor", parameter_frame, 'Augmentation factor', 9, 0, 2, 2)
 
-        def show_augment():
-            if self.checkbox_vars['aug'].get() == 1:
-                augment_factor_value.set(2)
-                Cluster_augment.grid(row=8, column=0, padx=2, pady=(20, 2))
-                Label_augment_factor.grid(row=9, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-                augment_factor_entry.grid(row=9, column=1, padx=2, pady=2)
-
-            elif self.checkbox_vars['aug'].get() == 0 and Cluster_augment and Label_augment_factor and augment_factor_entry:
-                Cluster_augment.destroy()
-                Label_augment_factor.destroy()
-                augment_factor_entry.destroy()
-                Cluster_augment = tk.Label(parameter_frame, text='AUGMENTATION', font='Helvetica 9 bold')
-                Label_augment_factor = tk.Label(parameter_frame, text='Augmentation factor')
-                augment_factor_value = tk.StringVar()
-                augment_factor_entry = tk.Entry(parameter_frame, textvariable=augment_factor_value)
-
-
-        downsample_value = tk.StringVar()
-        downsample_value1 = tk.Entry(parameter_frame, textvariable=downsample_value)
-
-        Filter_degree = tk.StringVar()
-        Filter_degree1 = tk.Entry(parameter_frame, textvariable=Filter_degree)
-
-        Filter_cut_off = tk.StringVar()
-        Filter_cut_off1 = tk.Entry(parameter_frame, textvariable=Filter_cut_off)
-
-        Force_Min = tk.StringVar()
-        Force_Min1 = tk.Entry(parameter_frame, textvariable=Force_Min)
-
-        Z_score_force = tk.StringVar()
-        Z_score_force1 = tk.Entry(parameter_frame, textvariable=Z_score_force)
-
-        Z_score_distance = tk.StringVar()
-        Z_score_distance1 = tk.Entry(parameter_frame, textvariable=Z_score_distance)
-
-        Cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
-        Label_downsample.grid(row=1, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-        downsample_value1.grid(row=1, column=1, padx=2, pady=2)
-
-        Label_Filter1.grid(row=2, column=0, padx=2, pady=2)
-        Filter_degree1.grid(row=2, column=1, padx=2, pady=2)
-
-        Label_Filter2.grid(row=3, column=0, padx=2, pady=2)
-        Filter_cut_off1.grid(row=3, column=1, padx=2, pady=2)
-
-        Label_ForceMin.grid(row=4, column=0, padx=2, pady=2)
-        Force_Min1.grid(row=4, column=1, padx=2, pady=2)
-
-        Cluster_statistics.grid(row=5, column=0, padx=2, pady=(20, 2))
-        Label_Zscore_F.grid(row=6, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-        Z_score_force1.grid(row=6, column=1, padx=2, pady=2)
-
-        Label_Zscore_D.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-        Z_score_distance1.grid(row=7, column=1, padx=2, pady=2)
-
-        start_bulk_analysis = tk.Button(
-            parameter_frame,
-            text='Select Folder to Analyse!',
-            command=start_analysis,
-            bg='#df4c4c',
-            activebackground='#eaa90d',
-            font='Helvetica 10 bold',
-            height=2,
-            width=20
-        )
-
-        start_bulk_analysis.grid(row=11, column=0, columnspan=2, pady=125)
+        self.create_button("Select Folder to Analyse!", parameter_frame, self.start_analysis, 11, 0, 2, 50, 2, 20, 2)
 
 
     def layout_tab_display_curve(self):
@@ -1192,21 +1112,309 @@ class FriedPotatoGUI:
         open_file.grid(row=0, column=0, pady=20, sticky='nsew')
 
 
-    # Placeholder methods for commands
-    def on_closing(self):
-        # makes sure all python processes/loops are cancelled before exiting
-        if tk.messagebox.askokcancel("Quit", "Do you really want to quit?"):
-            self.root.destroy()
+    def layout_tab_settings(self):
+        # Configure the grid to expand
+        self.tab_settings.grid_columnconfigure(0, weight=1)
+        self.tab_settings.grid_columnconfigure(2, weight=1)
+        self.tab_settings.grid_columnconfigure(4, weight=1)
+        self.tab_settings.grid_rowconfigure(0, weight=1)
+
+        step_finding_settings = tk.Canvas(self.tab_settings, width=300, height=600)
+        step_finding_settings.grid(row=0, column=0, sticky='NSEW')
+
+        separator1 = ttk.Separator(self.tab_settings, orient='vertical')
+        separator1.grid(row=0, column=1, sticky='NS')
+
+        export_settings = tk.Canvas(self.tab_settings, width=300, height=600)
+        export_settings.grid(row=0, column=2, sticky='NSEW')
+
+        separator2 = ttk.Separator(self.tab_settings, orient='vertical')
+        separator2.grid(row=0, column=3, sticky='NS')
+
+        fitting_settings = tk.Canvas(self.tab_settings, width=500, height=600)
+        fitting_settings.grid(row=0, column=4, sticky='NSEW')
+
+        # """ step finding settings """
+        cluster_preprocessing = tk.Label(step_finding_settings, text='PREPROCESSING', font='Helvetica 9 bold')
+        cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("downsample", step_finding_settings, 'Downsampling rate', 1, 0, 2, 2)
+        self.create_text_input("filter_degree", step_finding_settings, 'Butterworth filter degree', 2, 0, 2, 2)
+        self.create_text_input("filter_cut_off", step_finding_settings, 'Cut-off frequency', 3, 0, 2, 2)
+        self.create_text_input("force_min", step_finding_settings, 'Force threshold, pN', 4, 0, 2, 2)
+
+        cluster_derivative = tk.Label(step_finding_settings, text="DERIVATIVE", font='Helvetica 9 bold')
+        cluster_derivative.grid(row=5, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("step_d", step_finding_settings, 'Step d', 6, 0, 2, 2)
+        self.create_text_input("frequency", step_finding_settings, 'Data frequency, Hz', 7, 0, 2, 2)
+
+        cluster_statistics = tk.Label(step_finding_settings, text='STATISTICS', font='Helvetica 9 bold')
+        cluster_statistics.grid(row=8, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("z_score_force", step_finding_settings, 'Z-score force', 9, 0, 2, 2)
+        self.create_text_input("z_score_distance", step_finding_settings, 'Z-score distance', 10, 0, 2, 2)
+        self.create_text_input("window_size", step_finding_settings, 'Moving median window size', 12, 0, 2, 2)
+        self.create_text_input("std_difference", step_finding_settings, 'SD difference threshold', 13, 0, 2, 2)
+
+        # """ Export settings """
+        cluster_export = tk.Label(export_settings, text='EXPORT', font='Helvetica 9 bold')
+        cluster_export.grid(row=0, column=0, padx=20, pady=20)
+        self.create_check_box("smooth_data", export_settings, "Smoothed data", 1, None, 1, 0, 0)
+        self.create_check_box("plot", export_settings, "Plot", 1, None, 2, 0, 0)
+        self.create_check_box("steps", export_settings, "Steps found", 1, None, 3, 0, 0)
+        self.create_check_box("total_results", export_settings, "Total results", 1, None, 4, 0, 0)
+        self.create_check_box("fitting", export_settings, "Fitting", 1, None, 5, 0, 0)
+
+        # """ Fitting parameters """
+        # # Labels
+        cluster_fitting = tk.Label(fitting_settings, text='FITTING', font='Helvetica 9 bold')
+        cluster_fitting.grid(row=0, column=0, padx=20, pady=20)
+        self.create_check_box("WLC", fitting_settings, "WLC+WLC", 1, lambda: self.select_box("WLC", "FJC"), 1, 0, 2)
+        self.create_check_box("FJC", fitting_settings, "WLC+FJC", 0, lambda: self.select_box("FJC", "WLC"), 2, 0, 2)
+        self.create_text_input("dsLp", fitting_settings, 'dsLp [nm]', 3, 0, 2, (40,2))
+        self.create_text_input("dsLp_up", fitting_settings, 'dsLp upper bound [nm]', 4, 0, 2, 2)
+        self.create_text_input("dsLp_low", fitting_settings, 'dsLp lower bound [nm]', 5, 0, 2, 2)
+        self.create_text_input("dsLc", fitting_settings, 'dsLc [nm]', 6, 0, 2, (40,2))
+        self.create_text_input("ssLp", fitting_settings, 'ssLp [nm]', 3, 2, (20,2), (40,2))
+        self.create_text_input("ssLc", fitting_settings, 'ssLc [nm]', 6, 2, (20,2), (40,2))
+        self.create_text_input("ssLc_up", fitting_settings, 'ssLc upper bound [nm]', 7, 2, (20,2), 2)
+        self.create_text_input("stiffness_ds", fitting_settings, 'dsK0 [pN]', 8, 0, 2, (40,2))
+        self.create_text_input("stiffness_ds_up", fitting_settings, 'dsK0 upper bound [pN]', 9, 0, 2, 2)
+        self.create_text_input("stiffness_ds_low", fitting_settings, 'dsK0 lower bound [pN]', 10, 0, 2, 2)
+        self.create_text_input("stiffness_ss", fitting_settings, 'ssK0 [pN]', 8, 2, (20,2), (40,2))
+        self.create_text_input("stiffness_ss_up", fitting_settings, 'ssK0 upper bound [pN]', 9, 2, (20,2), 2)
+        self.create_text_input("stiffness_ss_low", fitting_settings, 'ssK0 lower bound [pN]', 10, 2, (20,2), 2)
+        self.create_text_input("f_offset", fitting_settings, 'Force offset [pN]', 11, 0, 2, (40,2))
+        self.create_text_input("f_offset_up", fitting_settings, 'Force offset upper bound [pN]', 12, 0, 2, 2)
+        self.create_text_input("f_offset_low", fitting_settings, 'Force offset lower bound [pN]', 13, 0, 2, 2)
+        self.create_text_input("d_offset", fitting_settings, 'Distance offset [nm]', 11, 2, (20,2), (40,2))
+        self.create_text_input("d_offset_up", fitting_settings, 'Distance offset upper bound [nm]', 12, 2, (20,2), 2)
+        self.create_text_input("d_offset_low", fitting_settings, 'Distance offset lower bound [nm]', 13, 2, (20,2), 2)
+
+
+    def layout_tab_constant_force(self):
+        output_frame = self.tab_frames["constant_force"]["output_frame"]
+        input_frame = self.tab_frames["constant_force"]["input_frame"]
+
+        self.create_button("Fit Constant Force Data", input_frame, self.start_constantF, 0, 0, 20, 20, 2, 25, 2)
+        self.create_button("Display Constant Force Data", input_frame, self.show_constantF, 1, 0, 20, 20, 2, 25, 2)
+
+        # organize settings
+        cluster_axes = tk.Label(input_frame, text='SET AXES', font='Helvetica 9 bold')
+        cluster_axes.grid(row=3, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("x_min_constant_f", input_frame, 'x min', 4, 0, 2, 2)
+        self.create_text_input("x_max_constant_f", input_frame, 'x max', 5, 0, 2, 2)
+
+        self.create_text_input("y_min_constant_f", input_frame, 'y min', 4, 2, (20, 0), 2)
+        self.create_text_input("y_max_constant_f", input_frame, 'y max', 5, 2, (20, 0), 2)
+
+        cluster_expected_fit = tk.Label(input_frame, text='EXPECTED VALUES', font='Helvetica 9 bold')
+        cluster_expected_fit.grid(row=6, column=0, padx=2, pady=(20, 2))
+        self.create_text_input("number_gauss", input_frame, 'Number of expected gaussians', 7, 0, 2, 2)
+        self.create_text_input("mean_gauss", input_frame, 'Expected mean of each gaussian', 8, 0, 2, 2)
+        self.create_text_input("STD_gauss", input_frame, 'Expected SD of each gaussian', 9, 0, 2, 2)
+        self.create_text_input("amplitude_gauss", input_frame, 'Expected amplitude of each gaussian', 10, 0, 2, 2)
+
+
+    def layout_tab_TOMATO(self):
+        output_frame = self.tab_frames["TOMATO"]["output_frame"]
+        input_frame = self.tab_frames["TOMATO"]["input_frame"]
+
+        # split output frame into two parts
+        TOMATO_figure_frame = tk.Canvas(output_frame, width=800, height=590)
+        TOMATO_figure_frame.grid(row=0, column=0, sticky='nsew')
+
+        TOMATO_results_frame = tk.Canvas(output_frame, width=800, height=150)
+        TOMATO_results_frame.grid(row=1, column=0, sticky='nsew')
+
+        ### create buttons ###
+        self.create_button("Choose folder", input_frame, self.start_TOMATO, 0, 0, 4, 4, 2, 16, 2)
+        self.create_button("Save results table", input_frame, self.export_TOMATO, 1, 0, 4, 4, 2, 16, 1)
+        self.create_button("Reset parameters", input_frame, self.reset_TOMATO, 1, 1, 4, 4, 2, 16, 1)
+    
+        # ### create entry widgets ###
+        # inital shift in distance and force
+        self.create_text_input("d_offset", input_frame, 'Distance offset [nm]', 2, 0, 2, 2)
+        self.create_text_input("f_offset", input_frame, 'Force offset [pN]', 2, 2, 2, 2)
+
+        # K0 for ds and ss
+        self.create_text_input("stiffness_ds", input_frame, 'dsK0 [pN]', 3, 0, 2, 2)
+        self.create_text_input("stiffness_ss", input_frame, 'ssK0 [pN]', 3, 2, 2, 2)
+    
+        ## handle part
+        # persistance length for ds and ss
+        self.create_text_input("dsLp", input_frame, 'dsLp [nm]', 4, 0, 2, 2)
+        self.create_text_input("ssLp", input_frame, 'ssLp [nm]', 4, 2, 2, 2)
+        # contour length for ds and ss
+        self.create_text_input("dsLc", input_frame, 'dsLc [nm]', 5, 0, 2, 2)
+        self.create_text_input("ssLc", input_frame, 'ssLc [nm]', 5, 2, 2, 2)
+
+
+        # start and end positions of step
+        label_strF = tk.Label(input_frame, text='Force [pN]', font='Helvetica 8 bold')
+        label_strF.grid(row=6, column=1, sticky=tk.E + tk.W, pady=(25, 0))
+        label_strD = tk.Label(input_frame, text='Distance [nm]', font='Helvetica 8 bold')
+        label_strD.grid(row=6, column=3, sticky=tk.E + tk.W, pady=(25, 0))
+        self.create_text_input("startF", input_frame, 'Start force [pN]', 7, 0, 2, 2)
+        self.create_text_input("startD", input_frame, 'Start distance [nm]', 7, 2, 2, 2)
+        self.create_text_input("endF", input_frame, 'End force [pN]', 8, 0, 2, 2)
+        self.create_text_input("endD", input_frame, 'End distance [nm]', 8, 2, 2, 2)
+        
+        # create button widgets that use the defined functions
+        self.create_button("Mark start", input_frame, self.start_click, 9, 0, 2, 0, 1, 10, 1)
+        self.create_button("Mark end", input_frame, self.end_click, 10, 0, 2, 0, 1, 10, 1)
+        self.create_button("Save step", input_frame, self.save_step, 9, 1, 2, 0, 1, 10, 1)
+        self.create_button("Delete step", input_frame, self.delete_step, 10, 1, 2, 0, 1, 10, 1)
+
+        # display help text for the shortcuts
+        text_info = tk.Text(input_frame, height=10, width=30, background='#f0f0f0', wrap='word', borderwidth=0, highlightthickness=0)
+        text_info.insert(tk.END, "Shortcuts", ('bold',))
+        text_info.insert(tk.END, "\nmark step start")
+        text_info.insert(tk.END, " <s>", ('bold',))
+        text_info.insert(tk.END, "\nmark step end")
+        text_info.insert(tk.END, " <e>", ('bold',))
+        text_info.insert(tk.END, "\nsave step")
+        text_info.insert(tk.END, " <Ctrl-s>", ('bold',))
+        text_info.insert(tk.END, "\nstart analysis")
+        text_info.insert(tk.END, " <Ctrl-f>", ('bold',))
+        text_info.insert(tk.END, "\ndelete results line")
+        text_info.insert(tk.END, " <mark+del>", ('bold',))
+        text_info.insert(tk.END, "\nnext curve")
+        text_info.insert(tk.END, " <Right arrow>", ('bold',))
+        text_info.insert(tk.END, "\nprevious curve")
+        text_info.insert(tk.END, " <Left arrow>", ('bold',))
+        text_info.tag_configure('bold', font=('Arial', 10, 'bold'))
+        text_info.grid(row=9, column=2, padx=4, pady=(20,20), columnspan=2, rowspan=2, sticky='nsew')
+        text_info.configure(state='disabled')  # Make the text widget read-only
+
+        # create Treeview for the steps to analyze
+        cols_steps = ('Step number', 'F start', 'F end', 'Step start', 'Step end')
+        tree_steps = ttk.Treeview(input_frame, columns=cols_steps, show='headings', height=5)
+
+        # set column headings
+        count = 0
+        for col in cols_steps:
+            tree_steps.heading(col, text=col)
+            tree_steps.column(col, minwidth=25, width=65)
+
+        tree_steps.grid(row=11, column=0, columnspan=2, pady=5)
+
+        # step_number = 1
+        # button_delete_step = tk.Button(TOMATO_parameter_frame, text='Delete step', command=delete_step, bg='lightsteelblue2', font=('Arial', 10, 'bold'))
+        # button_delete_step.grid(row=8, column=0, pady=2)
+
+        # button_start_analysis = tk.Button(TOMATO_parameter_frame, text='Analyze curve', command=analyze_steps, bg='#df4c4c', font=('Arial', 10, 'bold'))
+        # button_start_analysis.grid(row=7, column=1, rowspan=2, pady=2)
+
+        ### output frame
+        self.create_text_input("entry_filename", TOMATO_results_frame, 'Filename', 0, 0, 4, 4, width=75)
+ 
+        ## show the fitting parameters in a table
+        # create Treeview for results table
+        cols = (
+            'Filename',
+            'step number',
+            'Force step start [pN]',
+            'Force step end [pN]',
+            'mean force [pN]',
+            'extension step start [nm]',
+            'extension step end [nm]',
+            'Step length [nm]',
+            'ds contour length',
+            'ds persistance Length',
+            'ds stiffness (K0) [pN]',
+            'ss contour Length',
+            'ss persistance Length',
+            'ss stiffness (K0) [pN]',
+            'Force offset',
+            'Distance offset',
+            'Work [pN*nm]',
+            'Work [kT]'
+        )
+
+        tree_results = ttk.Treeview(TOMATO_results_frame, columns=cols, show='headings', height=5)
+        # set column headings
+        for col in cols:
+            tree_results.heading(col, text=col)
+            tree_results.column(col, minwidth=25, width=65)
+        tree_results.grid(row=1, column=0, padx=5, pady=5, columnspan=4)
+
 
     def start_analysis(self):
-        pass
+        self.check_settings()
+
+
+    def parameters(self, default_values, default_fit, default_constantF):
+        if not default_values == 0:
+            for key in self.text_input:
+                if key in default_values:
+                    self.text_input[key].delete(0, "end")
+                    self.text_input[key].insert("end", str(default_values[key]))
+
+        for key in self.text_input:
+            if key in default_fit:
+                self.text_input[key].delete(0, "end")
+                self.text_input[key].insert("end", str(default_fit[key]))
+            if key in default_constantF:
+                self.text_input[key].delete(0, "end")
+                self.text_input[key].insert("end", str(default_constantF[key]))
+
+
+    def check_settings(self):
+        wrong = 0
+        for key in self.text_input:
+            exclude_completly = ['startF', 'startD', 'endF', 'endD', 'entry_filename']
+            exclude_non_numeric = ['mean_gauss', 'STD_gauss', 'amplitude_gauss']
+
+            if not key in exclude_completly and not key in exclude_non_numeric: 
+                parameter = self.text_input[key].get()
+
+                try:
+                    float(parameter)  # Attempt to convert parameter to float
+                except ValueError:
+                    self.print_output(f'Parameter {key} is not a number!')
+                    wrong += 1
+    
+        if wrong == 0:
+            return self.text_input, self.checkbox_vars
+        else:
+            return
+
 
     def create_check_box(self, key, frame, text, var_value, check_command, row, column, pad):
         check_var = tk.IntVar(value=var_value)
         check_box = tk.Checkbutton(frame, text=text, variable=check_var, command=check_command)
-        check_box.grid(row=row, column=column, sticky='W', pady=pad)
+        check_box.grid(row=row, column=column, sticky='W', pady=pad, padx=pad)
         self.checkboxes[key] = check_box
         self.checkbox_vars[key] = check_var
+
+
+    def create_text_input(self, key, frame, text, row, column, padx, pady, width=15):
+        if not key in self.text_input.keys():
+            text_var = tk.StringVar()
+        else:
+            text_var = self.text_input_vars[key]
+
+        text_entry = tk.Entry(frame, textvariable=text_var, width=width)
+        text_label = tk.Label(frame, text=text)
+        text_label.grid(row=row, column=column, sticky='W', padx=padx, pady=pady)
+        text_entry.grid(row=row, column=column+1, padx=padx, pady=pady)
+        self.text_input[key] = text_entry
+        self.text_input_vars[key] = text_var
+
+
+    def create_button(self, text, frame, command, row, column, padx, pady, heigth, width, columnspan=1, cursor="hand2"):
+        button = tk.Button(
+            frame,
+            text=text,
+            command=command,
+            bg='#df4c4c',
+            activebackground='#eaa90d',
+            font='Helvetica 10 bold',
+            height=heigth,
+            width=width,
+            cursor=cursor
+        )
+        button.grid(row=row, column=column, padx=padx, pady=pady, columnspan=columnspan)
+
 
     def select_box(self, *selected_keys):
         for key1 in selected_keys:
@@ -1218,6 +1426,7 @@ class FriedPotatoGUI:
         boxes = [self.checkbox_vars[key].get() for key in selected_keys]
         if all(boxes) == 0:
             self.checkbox_vars[selected_keys[0]].set(value=1)
+
 
     def get_single_file(self):
         # Specify the allowed file types
@@ -1235,29 +1444,51 @@ class FriedPotatoGUI:
                 self.select_box("CSV", "HF", "LF")
                 # write message to output window
                 self.print_output("CSV file selected for display, loaded CSV parameters.")
-
+            elif self.checkbox_vars['CSV'].get() == 1:
+                self.print_output("CSV file selected for display.")
 
                 # parameters(default_values_CSV, default_values_FIT, default_values_constantF)
-            else:
-                pass
 
-        # input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
+        elif file_extension == '.h5':
+            if self.checkbox_vars['HF'].get() == 1:         
+                # write message to output window
+                self.print_output("H5 file selected (HF) for display.")
+            elif self.checkbox_vars['LF'].get() == 1:
+                # write message to output window
+                self.print_output("H5 file selected (LF) for display.")
 
-        # input_format['preprocess'] = 0
-        # FD_raw, FD_raw_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
-        # input_format['preprocess'] = 1
-        # FD, FD_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
+        text_params, checkbox_params = self.check_settings()
+
+        checkbox_params['prepro'] = 0
+        FD_raw, FD_raw_um, Frequency_value, filename = read_in_data(0, [import_file_path], text_params, checkbox_params)
+        checkbox_params['prepro'] = 1
+        FD, FD_um, Frequency_value, filename = read_in_data(0, [import_file_path], text_params, checkbox_params)
         # display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
 
     def print_output(self, text):
         current_time = time.localtime()
         current_time = time.strftime("%H:%M", current_time)
         self.output_window.config(state="normal")
-        self.output_window.insert("end", f"{current_time} -- {text}")
+        self.output_window.insert("end", f"{current_time} -- {text}\n")
         self.output_window.config(state="disabled")
+        self.output_window.see("end")
+
+    def refresh(self):
+        self.root.update()
+        self.root.update_idletasks()
 
     def show_h5(self):
-        pass
+        import_file_path = tk.filedialog.askopenfilename()
+        h5_structure = lk.File(import_file_path)
+        h5_structure_window = tk.Toplevel(self.root)
+        h5_structure_window.title("H5 structure")
+
+        text = tk.Text(h5_structure_window, height=50, width=200)
+        scroll_bar = tk.Scrollbar(h5_structure_window, command=text.yview)
+        scroll_bar.pack(side=tk.RIGHT, fill=tk.Y)
+        text['yscrollcommand'] = scroll_bar.set
+        text.pack(side=tk.LEFT, fill=tk.Y)
+        text.insert("end", h5_structure)
 
     def load_parameters(self):
         pass
@@ -1272,515 +1503,117 @@ class FriedPotatoGUI:
         pass
 
     def tab_bind(self, event):
-        pass
+        selected_tab = event.widget.nametowidget(event.widget.select())
+        if selected_tab == self.tab_TOMATO:
+            self.print_output("TOMATO is unresponsive during fitting, please be patient\n mark step start <s>\n mark step end <e>\n save marked step <Ctrl+s>\n start analysis <Ctrl+f>\n delete results line <mark+del>\n next curve <Right arrow>\n previous curve <Left arrow>")
 
     def show_augment(self):
         pass
 
+    def start_TOMATO(self):
+        pass
 
+    def export_TOMATO(self):
+        pass
+
+    def reset_TOMATO(self):
+        pass
+
+    def start_click(self):
+        pass
+
+    def end_click(self):
+        pass
+
+    def save_step(self):
+        pass
+    
+    def delete_step(self):
+        pass
+
+    def on_closing(self):
+        # makes sure all python processes/loops are cancelled before exiting
+        if tk.messagebox.askokcancel("Quit", "Do you really want to quit?"):
+            self.root.destroy()
+
+
+""" start the tkinter application """
 if __name__ == '__main__':
     mp.freeze_support()
     app = FriedPotatoGUI()
     app.root.mainloop()
 
 
-    # """organize tab3 - advanced settings """
-    # frame1 = tk.Frame(tab3, borderwidth=1, relief='ridge')
-    # frame1.grid(row=0, column=0, sticky='N')
-    # frame2 = tk.Frame(tab3, borderwidth=1, relief='ridge')
-    # frame2.grid(row=0, column=1, sticky='N', padx=(50, 20))
-    # frame3 = tk.Frame(tab3, borderwidth=1, relief='ridge')
-    # frame3.grid(row=0, column=2, sticky='N', padx=(50, 20))
 
-    # """ parameters in advanced settings """
-    # Cluster_preprocessing = tk.Label(frame1, text='PREPROCESSING', font='Helvetica 9 bold')
-    # Label_downsample = tk.Label(frame1, text='Downsampling rate')
-    # Label_Filter1 = tk.Label(frame1, text='Butterworth filter degree')
-    # Label_Filter2 = tk.Label(frame1, text='Cut-off frequency')
-    # Label_ForceMin = tk.Label(frame1, text='Force threshold, pN')
-    # Cluster_derivative = tk.Label(frame1, text="DERIVATIVE", font='Helvetica 9 bold')
-    # Label_step_d = tk.Label(frame1, text='Step d')
-    # Label_Frequency = tk.Label(frame1, text='Data frequency, Hz')
-    # Cluster_statistics = tk.Label(frame1, text='STATISTICS', font='Helvetica 9 bold')
-    # Label_Zscore_F = tk.Label(frame1, text='Z-score force')
-    # Label_Zscore_D = tk.Label(frame1, text='Z-score distance')
-    # Label_window_size = tk.Label(frame1, text='Moving median window size')
-    # Label_STD_difference = tk.Label(frame1, text='SD difference threshold')
 
-    # # parameters that occur double (tab1 and tab4)
-    # downsample_value2 = tk.Entry(frame1, textvariable=downsample_value)
-    # Filter_degree2 = tk.Entry(frame1, textvariable=Filter_degree)
-    # Filter_cut_off2 = tk.Entry(frame1, textvariable=Filter_cut_off)
-    # Force_Min2 = tk.Entry(frame1, textvariable=Force_Min)
-    # Z_score_force2 = tk.Entry(frame1, textvariable=Z_score_force)
-    # Z_score_distance2 = tk.Entry(frame1, textvariable=Z_score_distance)
 
-    # # parameters only in advanced settings
-    # step_d_variable = tk.StringVar()
-    # step_d_value = tk.Entry(frame1, textvariable=step_d_variable)
-
-    # window_size_variable = tk.StringVar()
-    # window_size_value = tk.Entry(frame1, textvariable=window_size_variable)
-
-    # STD_difference_variable = tk.StringVar()
-    # STD_difference_value = tk.Entry(frame1, textvariable=STD_difference_variable)
-
-    # Frequency_variable = tk.StringVar()
-    # Frequency_value = tk.Entry(frame1, textvariable=Frequency_variable)
-
-    # Cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
-    # Label_downsample.grid(row=1, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # downsample_value2.grid(row=1, column=1, padx=(0, 20), pady=2)
-
-    # Label_Filter1.grid(row=2, column=0, padx=2, pady=2)
-    # Filter_degree2.grid(row=2, column=1, padx=(0, 20), pady=2)
-
-    # Label_Filter2.grid(row=3, column=0, padx=2, pady=2)
-    # Filter_cut_off2.grid(row=3, column=1, padx=(0, 20), pady=2)
-
-    # Label_ForceMin.grid(row=4, column=0, padx=2, pady=2)
-    # Force_Min2.grid(row=4, column=1, padx=(0, 20), pady=2)
-
-    # Cluster_derivative.grid(row=5, column=0, padx=2, pady=(20, 2))
-    # Label_step_d.grid(row=6, column=0, padx=2, pady=2)
-    # step_d_value.grid(row=6, column=1, padx=(0, 20), pady=2)
-
-    # Label_Frequency.grid(row=7, column=0, padx=2, pady=2)
-    # Frequency_value.grid(row=7, column=1, padx=(0, 20), pady=2)
-
-    # Cluster_statistics.grid(row=8, column=0, padx=2, pady=(20, 2))
-    # Label_Zscore_F.grid(row=9, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # Z_score_force2.grid(row=9, column=1, padx=(0, 20), pady=2)
-
-    # Label_Zscore_D.grid(row=10, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # Z_score_distance2.grid(row=10, column=1, padx=(0, 20), pady=2)
-
-    # Label_window_size.grid(row=12, column=0, padx=2, pady=2)
-    # window_size_value.grid(row=12, column=1, padx=(0, 20), pady=2)
-
-    # Label_STD_difference.grid(row=13, column=0, padx=2, pady=2)
-    # STD_difference_value.grid(row=13, column=1, padx=(0, 20), pady=2)
-
-    # """ Output settings """
-    # check_box_smooth_data = tk.IntVar(value=1)
-    # check_box_plot = tk.IntVar(value=1)
-    # check_box_steps = tk.IntVar(value=1)
-    # check_box_total_results = tk.IntVar(value=1)
-    # check_box_fitting = tk.IntVar(value=1)
-
-    # Label_export = tk.Label(frame2, text="Select exported data", font='Helvetica 9 bold').grid(row=0, column=0, padx=20, pady=20)
-
-    # check_1 = tk.Checkbutton(
-    #     frame2,
-    #     text="Processed FD data",
-    #     variable=check_box_smooth_data,
-    # ).grid(row=1, column=0, sticky='W')
-
-    # check_2 = tk.Checkbutton(
-    #     frame2,
-    #     text="Plot",
-    #     variable=check_box_plot,
-    # ).grid(row=2, column=0, sticky='W')
-
-    # check_3 = tk.Checkbutton(
-    #     frame2,
-    #     text="Steps found",
-    #     variable=check_box_steps,
-    # ).grid(row=3, column=0, sticky='W')
-
-    # check_4 = tk.Checkbutton(
-    #     frame2,
-    #     text="Total results (All steps from all files)",
-    #     variable=check_box_total_results,
-    # ).grid(row=4, column=0, sticky='W')
-
-    # check_5 = tk.Checkbutton(
-    #     frame2,
-    #     text="Fitting",
-    #     variable=check_box_fitting,
-    # ).grid(row=5, column=0, sticky='W')
-
-    # """ Fitting parameters """
-    # # Labels
-    # Cluster_fitting = tk.Label(frame3, text='FITTING', font='Helvetica 9 bold')
-    # check_box_WLC = tk.IntVar(value=1)
-    # check_box_FJC = tk.IntVar(value=0)
-    # Label_dsLp = tk.Label(frame3, text='dsLp [nm]')
-    # Label_dsLp_up = tk.Label(frame3, text='dsLp upper bound [nm]')
-    # Label_dsLp_low = tk.Label(frame3, text='dsLp lower bound [nm]')
-    # Label_dsLc = tk.Label(frame3, text='dsLc [nm]')
-    # Label_ssLp = tk.Label(frame3, text='ssLp [nm]')
-    # Label_ssLc = tk.Label(frame3, text='ssLc [nm]')
-    # Label_ssLc_up = tk.Label(frame3, text='ssLc upper bound [nm]')
-    # Label_stiffness_ds = tk.Label(frame3, text='dsK0 [pN]')
-    # Label_stiffness_ds_up = tk.Label(frame3, text='dsK0 upper bound [pN]')
-    # Label_stiffness_ds_low = tk.Label(frame3, text='dsK0 lower bound [pN]')
-    # Label_stiffness_ss = tk.Label(frame3, text='ssK0 [pN]')
-    # Label_stiffness_ss_up = tk.Label(frame3, text='ssK0 upper bound [pN]')
-    # Label_stiffness_ss_low = tk.Label(frame3, text='ssK0 lower bound [pN]')
-    # Label_f_offset = tk.Label(frame3, text='Force offset [pN]')
-    # Label_f_offset_up = tk.Label(frame3, text='Force offset upper bound [pN]')
-    # Label_f_offset_low = tk.Label(frame3, text='Force offset lower bound [pN]')
-    # Label_d_offset = tk.Label(frame3, text='Distance offset [nm]')
-    # Label_d_offset_up = tk.Label(frame3, text='Distance offset upper bound [nm]')
-    # Label_d_offset_low = tk.Label(frame3, text='Distance offset lower bound [nm]')
-
-    # # Entry widgets
-    # dsLp_variable = tk.StringVar()
-    # dsLp = tk.Entry(frame3, textvariable=dsLp_variable)
-    # dsLp_up_variable = tk.StringVar()
-    # dsLp_up = tk.Entry(frame3, textvariable=dsLp_up_variable)
-    # dsLp_low_variable = tk.StringVar()
-    # dsLp_low = tk.Entry(frame3, textvariable=dsLp_low_variable)
-    # dsLc_variable = tk.StringVar()
-    # dsLc = tk.Entry(frame3, textvariable=dsLc_variable)
-    # ssLp_variable = tk.StringVar()
-    # ssLp = tk.Entry(frame3, textvariable=ssLp_variable)
-    # ssLc_variable = tk.StringVar()
-    # ssLc = tk.Entry(frame3, textvariable=ssLc_variable)
-    # ssLc_up_variable = tk.StringVar()  
-    # ssLc_up = tk.Entry(frame3, textvariable=ssLc_up_variable)
-    # stiff_ds_variable = tk.StringVar()
-    # stiff_ds = tk.Entry(frame3, textvariable=stiff_ds_variable)
-    # stiff_ds_up_variable = tk.StringVar()
-    # stiff_ds_up = tk.Entry(frame3, textvariable=stiff_ds_up_variable)
-    # stiff_ds_low_variable = tk.StringVar()
-    # stiff_ds_low = tk.Entry(frame3, textvariable=stiff_ds_low_variable)
-    # stiff_ss_variable = tk.StringVar()
-    # stiff_ss = tk.Entry(frame3, textvariable=stiff_ss_variable)
-    # stiff_ss_up_variable = tk.StringVar()
-    # stiff_ss_up = tk.Entry(frame3, textvariable=stiff_ss_up_variable)
-    # stiff_ss_low_variable = tk.StringVar()
-    # stiff_ss_low = tk.Entry(frame3, textvariable=stiff_ss_low_variable)
-    # f_off_variable = tk.StringVar()
-    # f_off = tk.Entry(frame3, textvariable=f_off_variable)
-    # f_off_up_variable = tk.StringVar()
-    # f_off_up = tk.Entry(frame3, textvariable=f_off_up_variable)
-    # f_off_low_variable = tk.StringVar()
-    # f_off_low = tk.Entry(frame3, textvariable=f_off_low_variable)
-    # d_off_variable = tk.StringVar()
-    # d_off = tk.Entry(frame3, textvariable=d_off_variable)
-    # d_off_up_variable = tk.StringVar()
-    # d_off_up = tk.Entry(frame3, textvariable=d_off_up_variable)
-    # d_off_low_variable = tk.StringVar()
-    # d_off_low = tk.Entry(frame3, textvariable=d_off_low_variable)
-
-    # Cluster_fitting.grid(row=0, column=0, padx=20, pady=20)
-
-    # check_WLC = tk.Checkbutton(
-    #     frame3,
-    #     text="WLC+WLC",
-    #     variable=check_box_WLC,
-    #     command=lambda: [check_box_WLC.set(value=1), check_box_FJC.set(value=0)]
-    # ).grid(row=1, column=0, sticky='W', pady=20)
-
-    # check_FJC = tk.Checkbutton(
-    #     frame3,
-    #     text="WLC+FJC",
-    #     variable=check_box_FJC,
-    #     command=lambda: [check_box_WLC.set(value=0), check_box_FJC.set(value=1)]
-    # ).grid(row=1, column=1, sticky='W', pady=20)
-
-    # Label_dsLp.grid(row=2, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # dsLp.grid(row=2, column=1, padx=(0, 20), pady=2)
-
-    # Label_dsLp_up.grid(row=3, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # dsLp_up.grid(row=3, column=1, padx=(0, 20), pady=2)
-
-    # Label_dsLp_low.grid(row=4, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # dsLp_low.grid(row=4, column=1, padx=(0, 20), pady=2)
-
-    # Label_dsLc.grid(row=5, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # dsLc.grid(row=5, column=1, padx=(0, 20), pady=2)
-
-    # Label_ssLp.grid(row=2, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # ssLp.grid(row=2, column=3, padx=(0, 20), pady=2)
-
-    # Label_ssLc.grid(row=3, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # ssLc.grid(row=3, column=3, padx=(0, 20), pady=2)
-
-    # Label_ssLc_up.grid(row=4, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # ssLc_up.grid(row=4, column=3, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ds.grid(row=6, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ds.grid(row=6, column=1, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ds_up.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ds_up.grid(row=7, column=1, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ds_low.grid(row=8, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ds_low.grid(row=8, column=1, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ss.grid(row=6, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ss.grid(row=6, column=3, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ss_up.grid(row=7, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ss_up.grid(row=7, column=3, padx=(0, 20), pady=2)
-
-    # Label_stiffness_ss_low.grid(row=8, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # stiff_ss_low.grid(row=8, column=3, padx=(0, 20), pady=2)
-
-    # Label_f_offset.grid(row=9, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # f_off.grid(row=9, column=1, padx=(0, 20), pady=2)
-
-    # Label_f_offset_up.grid(row=10, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # f_off_up.grid(row=10, column=1, padx=(0, 20), pady=2)
-
-    # Label_f_offset_low.grid(row=11, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # f_off_low.grid(row=11, column=1, padx=(0, 20), pady=2)
-
-    # Label_d_offset.grid(row=12, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # d_off.grid(row=12, column=1, padx=(0, 20), pady=2)
-
-    # Label_d_offset_up.grid(row=13, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # d_off_up.grid(row=13, column=1, padx=(0, 20), pady=2)
-
-    # Label_d_offset_low.grid(row=14, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # d_off_low.grid(row=14, column=1, padx=(0, 20), pady=2)
-
-    # """organize tab4"""
-    # # split tab into 2 frames, one for the figure to be displayed and one for the parameters
-    # figure_frame_tab4 = tk.Canvas(tab4, height=650, width=650, borderwidth=1, relief='ridge')
-    # figure_frame_tab4.grid(row=0, column=0)
-
-    # parameter_frame_tab4 = tk.Frame(tab4)
-    # parameter_frame_tab4.grid(row=0, column=1, sticky='NE')
-
-    # start_bulk_analysis_tab4 = tk.Button(
-    #     parameter_frame_tab4,
-    #     text='Fit Constant Force Data',
-    #     command=start_constantF,
-    #     bg='#df4c4c',
-    #     activebackground='#eaa90d',
-    #     font='Helvetica 11 bold',
-    #     height=1,
-    #     width=25
-    # )
-
-    # BUTTON2_tab4 = tk.Button(
-    #     parameter_frame_tab4,
-    #     text='Display Constant Force Data',
-    #     command=show_constantF,
-    #     bg='#df4c4c',
-    #     activebackground='#eaa90d',
-    #     font='Helvetica 11 bold',
-    #     height=1,
-    #     width=25
-    # )
-
-    # start_bulk_analysis_tab4.grid(row=0, column=0, columnspan=2, padx=20, pady=20, sticky='E')
-    # BUTTON2_tab4.grid(row=0, column=2, columnspan=2, padx=20, pady=20, sticky='E')
-
-    # # organize settings
-    # Cluster_axes = tk.Label(parameter_frame_tab4, text='SET AXES', font='Helvetica 9 bold')
-
-    # Label_x_min = tk.Label(parameter_frame_tab4, text='x min')
-    # x_min = tk.Entry(parameter_frame_tab4)
-
-    # Label_x_max = tk.Label(parameter_frame_tab4, text='x max')
-    # x_max = tk.Entry(parameter_frame_tab4)
-
-    # Label_y_min = tk.Label(parameter_frame_tab4, text='y min')
-    # y_min = tk.Entry(parameter_frame_tab4)
-
-    # Label_y_max = tk.Label(parameter_frame_tab4, text='y max')
-    # y_max = tk.Entry(parameter_frame_tab4)
-
-    # Cluster_expected_fit = tk.Label(parameter_frame_tab4, text='EXPECTED VALUES', font='Helvetica 9 bold')
-
-    # Label_number_gauss = tk.Label(parameter_frame_tab4, text='Number of expected gaussians')
-    # number_gauss = tk.Entry(parameter_frame_tab4)
-
-    # Label_mean_gauss = tk.Label(parameter_frame_tab4, text='Expected mean of each gaussian')
-    # mean_gauss = tk.Entry(parameter_frame_tab4)
-
-    # Label_STD_gauss = tk.Label(parameter_frame_tab4, text='Expected SD of each gaussian')
-    # STD_gauss = tk.Entry(parameter_frame_tab4)
-
-    # Label_amplitude_gauss = tk.Label(parameter_frame_tab4, text='Expected amplitude of each gaussian')
-    # amplitude_gauss = tk.Entry(parameter_frame_tab4)
-
-    # Cluster_axes.grid(row=2, column=0, padx=2, pady=(20, 2))
-    # Label_x_min.grid(row=3, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # x_min.grid(row=3, column=1, padx=(0, 20), pady=2)
-
-    # Label_x_max.grid(row=4, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # x_max.grid(row=4, column=1, padx=(0, 20), pady=2)
-
-    # Label_y_min.grid(row=3, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # y_min.grid(row=3, column=3, padx=(0, 20), pady=2)
-
-    # Label_y_max.grid(row=4, column=2, sticky=tk.E + tk.W, padx=2, pady=2)
-    # y_max.grid(row=4, column=3, padx=(0, 20), pady=2)
-
-    # Cluster_expected_fit.grid(row=5, column=0, padx=2, pady=(20, 2))
-    # Label_number_gauss.grid(row=6, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # number_gauss.grid(row=6, column=1, sticky=tk.E + tk.W, padx=2, pady=2)
-
-    # Label_mean_gauss.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # mean_gauss.grid(row=7, column=1, sticky=tk.E + tk.W, padx=2, pady=2)
-
-    # Label_STD_gauss.grid(row=8, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # STD_gauss.grid(row=8, column=1, sticky=tk.E + tk.W, padx=2, pady=2)
-
-    # Label_amplitude_gauss.grid(row=9, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    # amplitude_gauss.grid(row=9, column=1, sticky=tk.E + tk.W, padx=2, pady=2)
-
-    # """organize tab5 ---- TOMATO"""
-    # TOMATO_figure_frame = tk.Canvas(tab5, height=650, width=1000, borderwidth=1, relief='ridge')
-    # TOMATO_figure_frame.grid(row=0, column=0, rowspan=2)
-
-    # TOMATO_button_frame = tk.Frame(tab5)
-    # TOMATO_button_frame.grid(row=0, column=1, sticky=tk.N + tk.W)
-
-    # TOMATO_parameter_frame = tk.Frame(tab5, borderwidth=1, relief='ridge')
-    # TOMATO_parameter_frame.grid(row=1, column=1, sticky=tk.N + tk.W)
-
-    # TOMATO_frame_table = tk.Frame(tab5, width=400, height=100)
-    # TOMATO_frame_table.grid(row=2, column=0)
-
-    # ### create entry widgets ###
-    # # shift in distance
-    # label_shift_d = tk.Label(TOMATO_parameter_frame, text='Distance offset [nm]')
-    # label_shift_d.grid(row=0, column=0, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_shift_d = tk.Entry(TOMATO_parameter_frame, textvariable=d_off_variable).grid(row=0, column=1)
-
-    # # shift in F
-    # label_shift_F = tk.Label(TOMATO_parameter_frame, text='Force offset [pN]')
-    # label_shift_F.grid(row=0, column=2, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_shift_F = tk.Entry(TOMATO_parameter_frame, textvariable=f_off_variable).grid(row=0, column=3)
-
-    # # K0 for both
-    # # ds
-    # label_ds_St = tk.Label(TOMATO_parameter_frame, text='dsK0 [pN]')
-    # label_ds_St.grid(row=1, column=0, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ds_St = tk.Entry(TOMATO_parameter_frame, textvariable=stiff_ds_variable).grid(row=1, column=1)
-
-    # # ss
-    # label_ss_St = tk.Label(TOMATO_parameter_frame, text='ssK0 [pN]')
-    # label_ss_St.grid(row=1, column=2, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ss_St = tk.Entry(TOMATO_parameter_frame, textvariable=stiff_ss_variable).grid(row=1, column=3)
-
-    # ## ds handle part
-    # # ds handle persistance length
-    # label_ds_Lp = tk.Label(TOMATO_parameter_frame, text='dsLp [nm]')
-    # label_ds_Lp.grid(row=2, column=0, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ds_Lp = tk.Entry(TOMATO_parameter_frame, textvariable=dsLp_variable).grid(row=2, column=1)
-
-    # # ds handle  contour length
-    # label_ds_Lc = tk.Label(TOMATO_parameter_frame, text='dsLc [nm]')
-    # label_ds_Lc.grid(row=3, column=0, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ds_Lc = tk.Entry(TOMATO_parameter_frame, textvariable=dsLc_variable).grid(row=3, column=1)
-
-    # ## ss RNA part
-    # # ss RNA persistance length
-    # label_ss_Lp = tk.Label(TOMATO_parameter_frame, text=' ssLp [nm]')
-    # label_ss_Lp.grid(row=2, column=2, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ss_Lp = tk.Entry(TOMATO_parameter_frame, textvariable=ssLp_variable).grid(row=2, column=3)
-
-    # # ss RNA contour length
-    # label_ss_Lc = tk.Label(TOMATO_parameter_frame, text=' ssLc [nm]')
-    # label_ss_Lc.grid(row=3, column=2, sticky=tk.E + tk.W, padx=(4, 2), pady=2)
-    # entry_ss_Lc = tk.Entry(TOMATO_parameter_frame, textvariable=ssLc_variable).grid(row=3, column=3)
-
-    # # start position
-    # label_strF = tk.Label(TOMATO_parameter_frame, text='Force [pN]')
-    # label_strF.grid(row=4, column=1, sticky=tk.E + tk.W, pady=(25, 0))
-
-    # label_strD = tk.Label(TOMATO_parameter_frame, text='Distance [nm]')
-    # label_strD.grid(row=4, column=2, sticky=tk.E + tk.W, pady=(25, 0))
-
-    # entryText_startF = tk.StringVar()
-    # entry_startF = tk.Entry(TOMATO_parameter_frame, textvariable=entryText_startF).grid(row=5, column=1, pady=2)
-
-    # entryText_startD = tk.StringVar()
-    # entry_startD = tk.Entry(TOMATO_parameter_frame, textvariable=entryText_startD).grid(row=5, column=2, pady=2)
-
-    # # end position
-
-    # entryText_endF = tk.StringVar()
-    # entry_endF = tk.Entry(TOMATO_parameter_frame, textvariable=entryText_endF).grid(row=6, column=1, pady=2)
-
-    # entryText_endD = tk.StringVar()
-    # entry_endD = tk.Entry(TOMATO_parameter_frame, textvariable=entryText_endD).grid(row=6, column=2, pady=2)
-
-    # entryText_filename = tk.StringVar()
-    # entry_filename = tk.Entry(TOMATO_frame_table, textvariable=entryText_filename, width=100)
-    # entry_filename.grid(row=0, column=0)
-
-    # # create button widgets that use the defined functions
-    # browseButton_folder = tk.Button(TOMATO_button_frame, text="      Choose folder     ", command=open_folder, bg='green', fg='white', font=('Arial', 11, 'bold'))
-    # browseButton_folder.grid(row=0, column=0, padx=4, pady=4)
-
-    # button_save = tk.Button(TOMATO_button_frame, text='Save results table', command=export_table, bg='palegreen2', font=('Arial', 11, 'bold'))
-    # button_save.grid(row=1, column=0, padx=4, pady=4)
-
-    # button_reset_parameters = tk.Button(TOMATO_button_frame, text='Reset parameters', command=lambda: parameters(0, default_values_FIT, default_values_constantF) if check_box_HF == 1 else (parameters(default_values_HF, default_values_FIT, default_values_constantF) if check_box_LF == 1 else parameters(default_values_CSV, default_values_FIT, default_values_constantF)), bg='palegreen2', font=('Arial', 11, 'bold'))
-    # button_reset_parameters.grid(row=1, column=1, padx=4, pady=4)
-
-    # label_info = tk.Label(TOMATO_button_frame, text='TOMATO is unresponsive during fitting, please be patient\n\nmark step start <s>\n mark step end <e>\n save marked step <Ctrl+s>\n start analysis <Ctrl+f>\n delete results line <mark+del>\n next curve <Right arrow>\n previous curve <Left arrow>')
-    # label_info.grid(row=2, column=0, padx=4, pady=4)
-
-    # button_start = tk.Button(TOMATO_parameter_frame, text='Set start', command=start_click, bg='lightsteelblue2', font=('Arial', 10, 'bold'))
-    # button_start.grid(row=5, column=0, pady=2)
-
-    # button_end = tk.Button(TOMATO_parameter_frame, text='Set end', command=end_click, bg='lightsteelblue2', font=('Arial', 10, 'bold'))
-    # button_end.grid(row=6, column=0, pady=2)
-
-    # step_number = 1
-    # button_save_step = tk.Button(TOMATO_parameter_frame, text='Save step', command=save_step, bg='lightsteelblue2', font=('Arial', 10, 'bold'))
-    # button_save_step.grid(row=7, column=0, pady=2)
-
-    # button_delete_step = tk.Button(TOMATO_parameter_frame, text='Delete step', command=delete_step, bg='lightsteelblue2', font=('Arial', 10, 'bold'))
-    # button_delete_step.grid(row=8, column=0, pady=2)
-
-    # button_start_analysis = tk.Button(TOMATO_parameter_frame, text='Analyze curve', command=analyze_steps, bg='#df4c4c', font=('Arial', 10, 'bold'))
-    # button_start_analysis.grid(row=7, column=1, rowspan=2, pady=2)
-
-    # ## show the fitting parameters in a table
-    # # create Treeview for results table
-    # cols = (
-    #     'Filename',
-    #     'step number',
-    #     'Force step start [pN]',
-    #     'Force step end [pN]',
-    #     'mean force [pN]',
-    #     'extension step start [nm]',
-    #     'extension step end [nm]',
-    #     'Step length [nm]',
-    #     'ds contour length',
-    #     'ds persistance Length',
-    #     'ds stiffness (K0) [pN]',
-    #     'ss contour Length',
-    #     'ss persistance Length',
-    #     'ss stiffness (K0) [pN]',
-    #     'Force offset',
-    #     'Distance offset',
-    #     'Work [pN*nm]',
-    #     'Work [kT]'
-    # )
-
-    # tree_results = ttk.Treeview(TOMATO_frame_table, columns=cols, show='headings', height=5)
-    # # set column headings
-    # for col in cols:
-    #     tree_results.heading(col, text=col)
-    #     tree_results.column(col, minwidth=25, width=65)
-    # tree_results.grid(row=1, column=0, padx=5, pady=5)
-
-    # # create Treeview for the steps to analyze
-    # cols_steps = ('Step number', 'F start', 'F end', 'Step start', 'Step end')
-    # tree_steps = ttk.Treeview(TOMATO_parameter_frame, columns=cols_steps, show='headings', height=5)
-    # # set column headings
-    # for col in cols_steps:
-    #     tree_steps.heading(col, text=col)
-    #     tree_steps.column(col, minwidth=25, width=65)
-    # tree_steps.grid(row=9, column=0, columnspan=2, pady=5)
-    # ######### TOMATO end ############
-
-    # ############ POTATO last part ###############
-    # # put default values into the widgets
-    # parameters(default_values_HF, default_values_FIT, default_values_constantF)
-
-    # # loop ensuring the GUI is running until closed
-    # root.protocol("WM_DELETE_WINDOW", on_closing)
-    # root.mainloop()
+# input_settings = {
+#     'downsample_value': int(downsample_value2.get()),
+#     'filter_degree': int(Filter_degree2.get()),
+#     'filter_cut_off': float(Filter_cut_off2.get()),
+#     'F_min': float(Force_Min2.get()),
+#     'step_d': int(step_d_value.get()),
+#     'z-score_f': float(Z_score_force2.get()),
+#     'z-score_d': float(Z_score_distance2.get()),
+#     'window_size': int(window_size_value.get()),
+#     'data_frequency': float(Frequency_value.get()),
+#     'STD_diff': float(STD_difference_value.get()),
+#     'augment_factor': augment_factor_value.get()
+# }
+
+# input_format = {
+#     'HF': check_box_HF.get(),
+#     'LF': check_box_LF.get(),
+#     'CSV': check_box_CSV.get(),
+#     'Augment': check_box_augment.get(),
+#     'Trap': check_box_Trap1.get(),
+#     'length_measure': check_box_um.get(),
+#     'MultiH5': check_box_multiH5.get(),
+#     'preprocess': check_box_preprocess.get(),
+#     'reverse_fitting':check_box_reverse_fitting.get()
+# }
+
+# export_data = {
+#     'export_SMOOTH': check_box_smooth_data.get(),
+#     'export_PLOT': check_box_plot.get(),
+#     'export_STEPS': check_box_steps.get(),
+#     'export_TOTAL': check_box_total_results.get(),
+#     'export_FIT': check_box_fitting.get()
+# }
+
+# input_fitting = {
+#     'WLC+WLC': int(check_box_WLC.get()),
+#     'WLC+FJC': int(check_box_FJC.get()),
+#     'lp_ds': float(dsLp.get()),
+#     'lp_ds_up': float(dsLp_up.get()),
+#     'lp_ds_low': float(dsLp_low.get()),
+#     'lc_ds': float(dsLc.get()),
+#     'lp_ss': float(ssLp.get()),
+#     'lc_ss': float(ssLc.get()),
+#     'lc_ss_up': float(ssLc_up.get()),
+#     'ds_stiff': float(stiff_ds.get()),
+#     'ds_stiff_up': float(stiff_ds_up.get()),
+#     'ds_stiff_low': float(stiff_ds_low.get()),
+#     'ss_stiff': float(stiff_ss.get()),
+#     'ss_stiff_up': float(stiff_ss_up.get()),
+#     'ss_stiff_low': float(stiff_ss_low.get()),
+#     'offset_f': float(f_off.get()),
+#     'offset_f_up': float(f_off_up.get()),
+#     'offset_f_low': float(f_off_low.get()),
+#     'offset_d': float(d_off.get()),
+#     'offset_d_up': float(d_off_up.get()),
+#     'offset_d_low': float(d_off_low.get())
+# }
+
+# input_constantF = {
+#     'x min': int(x_min.get()),
+#     'x max': int(x_max.get()),
+#     'y min': int(y_min.get()),
+#     'y max': int(y_max.get()),
+#     'Number gauss': int(number_gauss.get()),
+#     'Mean': mean_gauss.get(),
+#     'STD': STD_gauss.get(),
+#     'Amplitude': amplitude_gauss.get()
+# }
+
+# return input_settings, input_format, export_data, input_fitting, input_constantF
