@@ -33,7 +33,7 @@ import multiprocessing as mp
 import json
 
 # relative imports
-from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data
+from FRIED_POTATO_ForceRamp import start_subprocess, force_ramp_data
 from FRIED_POTATO_preprocessing import create_derivative
 from FRIED_POTATO_config import default_values_HF, default_values_LF, default_values_CSV, default_values_FIT, default_values_constantF
 from FRIED_POTATO_constantF import get_constantF, display_constantF, fit_constantF
@@ -351,9 +351,9 @@ def readme():
 #     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
 #     input_format['preprocess'] = 0
-#     FD_raw, FD_raw_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
+#     FD_raw, FD_raw_um, Frequency_value, filename = force_ramp_data(0, [import_file_path], input_settings, input_format)
 #     input_format['preprocess'] = 1
-#     FD, FD_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
+#     FD, FD_um, Frequency_value, filename = force_ramp_data(0, [import_file_path], input_settings, input_format)
 #     display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
 
 #     if format == 'csv':
@@ -365,34 +365,6 @@ def readme():
 #             pass
 
 
-# create the plot for tab2
-def display_RAW_FD(processed_F, processed_D, raw_F, raw_D, filename):
-    global figure_raw
-
-    try:
-        figure_raw.get_tk_widget().destroy()
-    except:
-        pass
-
-    single_fd = Figure(figsize=(10, 6), dpi=100)
-    subplot1 = single_fd.add_subplot(111)
-
-    legend_elements = [
-        Line2D([0], [0], color='C0', lw=4),
-        Line2D([0], [0], color='C1', lw=4)
-    ]
-
-    subplot1.set_title(str(filename))
-    subplot1.set_xlabel("Distance (nm)")
-    subplot1.set_ylabel("Force (pN)")
-    subplot1.scatter(raw_D, raw_F, alpha=0.8, color='C0', s=0.1, zorder=0)
-    subplot1.scatter(processed_D, processed_F, marker='.', s=0.1, linewidths=None, alpha=1, color='C1', zorder=1)
-    subplot1.legend(legend_elements, ['Downsampled FD-Data', 'Filtered FD-Data'])
-
-    figure_raw = FigureCanvasTkAgg(single_fd, figure_frame2)
-    figure_raw.get_tk_widget().grid(row=0, column=0, sticky='wens')
-
-    tabControl.select(tab2)
 
 
 def start_constantF():
@@ -449,7 +421,7 @@ def open_folder():
     Files = glob.glob(folder_path)
 
     FD_number = 0
-    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = read_in_data(FD_number, Files, input_settings, input_format)
+    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = force_ramp_data(FD_number, Files, input_settings, input_format)
     der_arr_TOMATO = create_derivative(input_settings, Frequency_value, Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
 
     entryText_filename.set(filename_TOMATO)
@@ -482,7 +454,7 @@ def change_FD(direction):
 
     delete_all_steps()
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
-    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = read_in_data(FD_number, Files, input_settings, input_format)
+    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = force_ramp_data(FD_number, Files, input_settings, input_format)
 
     orientation = 'forward'
     if Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:  # reverse
@@ -956,7 +928,7 @@ class FriedPotatoGUI:
     
         # Create a scrollbar
         scrollbar = tk.Scrollbar(self.root, command=self.output_window.yview)
-        scrollbar.grid(row=0, column=1)
+        scrollbar.grid(row=0, column=1, sticky="ns")
     
         self.output_window.config(yscrollcommand=scrollbar.set)
     
@@ -1097,19 +1069,7 @@ class FriedPotatoGUI:
     def layout_tab_display_curve(self):
         output_frame = self.tab_frames["display_curve"]["output_frame"]
         input_frame = self.tab_frames["display_curve"]["input_frame"]
-
-        open_file = tk.Button(
-            input_frame,
-            text='Open file to display',
-            command=lambda: self.get_single_file(),
-            bg='#df4c4c',
-            activebackground='#eaa90d',
-            font='Helvetica 11 bold',
-            height=1,
-            width=15
-        )
-
-        open_file.grid(row=0, column=0, pady=20, sticky='nsew')
+        self.create_button("Open file to display", input_frame, self.get_single_file, 0, 0, 2, 20, 2, 20, 2)
 
 
     def layout_tab_settings(self):
@@ -1359,7 +1319,11 @@ class FriedPotatoGUI:
 
 
     def check_settings(self):
+        # This takes a "snapshot" of the current settings, so that even if something gets changed in the GUI, the started analysis will use the settings that were present when the analysis was started
         wrong = 0
+        text_settings = {}
+        checkbox_settings = {}
+
         for key in self.text_input:
             exclude_completly = ['startF', 'startD', 'endF', 'endD', 'entry_filename']
             exclude_non_numeric = ['mean_gauss', 'STD_gauss', 'amplitude_gauss']
@@ -1369,12 +1333,16 @@ class FriedPotatoGUI:
 
                 try:
                     float(parameter)  # Attempt to convert parameter to float
+                    text_settings[key] = parameter
                 except ValueError:
                     self.print_output(f'Parameter {key} is not a number!')
                     wrong += 1
     
+        for key in self.checkbox_vars:
+            checkbox_settings[key] = self.checkbox_vars[key].get()
+
         if wrong == 0:
-            return self.text_input, self.checkbox_vars
+            return text_settings, checkbox_settings
         else:
             return
 
@@ -1437,33 +1405,93 @@ class FriedPotatoGUI:
 
         import_file_path = tk.filedialog.askopenfilename(filetypes=types)
         file_extension = os.path.splitext(import_file_path)[1]
+        filename = os.path.basename(import_file_path)
 
         if file_extension == '.csv' or file_extension == '.txt' or file_extension == '.tsv':
-            if not self.checkbox_vars['CSV'].get() == 1:
-                self.checkbox_vars['CSV'].set(value=1)
-                self.select_box("CSV", "HF", "LF")
-                # write message to output window
-                self.print_output("CSV file selected for display, loaded CSV parameters.")
-            elif self.checkbox_vars['CSV'].get() == 1:
-                self.print_output("CSV file selected for display.")
-
-                # parameters(default_values_CSV, default_values_FIT, default_values_constantF)
-
+            try:
+                data = pd.read_csv(import_file_path, comment='#')
+                if data.shape[1] != 2:
+                    raise Exception
+                else:
+                    self.checkbox_vars['CSV'].set(1)
+                    self.select_box('CSV', 'HF', 'LF')
+                    self.print_output("CSV/Text file selected for display.")
+            except:
+                self.print_output("The selected file does not contain FD data in 2 columns.")
+                return
+            
         elif file_extension == '.h5':
-            if self.checkbox_vars['HF'].get() == 1:         
-                # write message to output window
-                self.print_output("H5 file selected (HF) for display.")
-            elif self.checkbox_vars['LF'].get() == 1:
-                # write message to output window
-                self.print_output("H5 file selected (LF) for display.")
+            h5_file = lk.File(import_file_path)
+            try:
+                dist = h5_file['Distance']['Piezo Distance'][:]
+                self.checkbox_vars['HF'].set(1)
+                self.select_box('HF', 'LF', 'CSV')
+                self.print_output("H5 file contains high frequency Piezo distance data.")
+                self.print_output("Proceeding with high frequency data.")
+            except:
+                self.checkbox_vars['LF'].set(1)
+                self.select_box('LF', 'HF', 'CSV')
+                self.print_output("H5 file does not contain high frequency Piezo distance data.")
+                self.print_output("Proceeding with low frequency data.")
 
         text_params, checkbox_params = self.check_settings()
 
-        checkbox_params['prepro'] = 0
-        FD_raw, FD_raw_um, Frequency_value, filename = read_in_data(0, [import_file_path], text_params, checkbox_params)
-        checkbox_params['prepro'] = 1
-        FD, FD_um, Frequency_value, filename = read_in_data(0, [import_file_path], text_params, checkbox_params)
-        # display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
+        if checkbox_params['prepro'] == 1:
+            checkbox_params['prepro'] = 0
+            data_raw = force_ramp_data(0, [import_file_path], text_params, checkbox_params)
+            checkbox_params['prepro'] = 1
+            data_prepro = force_ramp_data(0, [import_file_path], text_params, checkbox_params)
+        else:
+            data_raw = force_ramp_data(0, [import_file_path], text_params, checkbox_params)
+            data_prepro = force_ramp_data(0, [import_file_path], text_params, checkbox_params)
+
+        for i in data_prepro.output:
+            self.print_output(i)
+
+        FD = data_prepro.force_distance
+        FD_raw = data_raw.force_distance
+        self.display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
+
+    
+    # create the plot for tab2
+    def display_RAW_FD(self, processed_F, processed_D, raw_F, raw_D, filename):
+        try:
+            self.figure_raw.get_tk_widget().destroy()
+            self.toolbar_single.destroy()
+        except:
+            pass
+
+        single_fd = Figure(figsize=(10, 6), dpi=100)
+        subplot1 = single_fd.add_subplot(111)
+
+        legend_elements = [
+            Line2D([0], [0], color='C0', lw=4),
+            Line2D([0], [0], color='C1', lw=4)
+        ]
+
+        subplot1.set_title(str(filename))
+        subplot1.set_xlabel("Distance (nm)")
+        subplot1.set_ylabel("Force (pN)")
+        if len(raw_F) > 10000:
+            subplot1.scatter(raw_D, raw_F, alpha=0.8, color='C0', s=0.1, zorder=0, rasterized=True)
+        else:
+            subplot1.scatter(raw_D, raw_F, alpha=0.8, color='C0', s=0.1, zorder=0)
+        if len(processed_F) > 10000:
+            subplot1.scatter(processed_D, processed_F, marker='.', s=0.1, linewidths=None, alpha=1, color='C1', zorder=1, rasterized=True)
+        else:
+            subplot1.scatter(processed_D, processed_F, marker='.', s=0.1, linewidths=None, alpha=1, color='C1', zorder=1)
+        
+        subplot1.legend(legend_elements, ['Downsampled FD-Data', 'Filtered FD-Data'])
+
+        self.figure_raw = FigureCanvasTkAgg(single_fd, self.tab_frames["display_curve"]["output_frame"])
+        self.toolbar_single = NavigationToolbar2Tk(self.figure_raw, self.tab_frames["display_curve"]["output_frame"])
+        self.toolbar_single.update()
+        self.toolbar_single.pack_forget()
+
+        self.figure_raw.get_tk_widget().grid(row=0, column=0, sticky='wens')
+        self.toolbar_single.grid(row=1, column=0, sticky='wens')
+        self.tabControl.select(self.tab_display_curve)
+
 
     def print_output(self, text):
         current_time = time.localtime()
@@ -1478,7 +1506,7 @@ class FriedPotatoGUI:
         self.root.update_idletasks()
 
     def show_h5(self):
-        import_file_path = tk.filedialog.askopenfilename()
+        import_file_path = tk.filedialog.askopenfilename(filetypes=[("H5 files", "*.h5"), ("All files", "*.*")])
         h5_structure = lk.File(import_file_path)
         h5_structure_window = tk.Toplevel(self.root)
         h5_structure_window.title("H5 structure")

@@ -5,75 +5,169 @@ import h5py
 import numpy as np
 from pathlib import Path
 import traceback
+import lumicks.pylake as lk
+from scipy import signal
 
 # relative imports
 from FRIED_POTATO_fitting import fitting_ds, fitting_ss, plot_fit, fitting_FU, fitting_FU_ss
-from FRIED_POTATO_preprocessing import preprocess_RAW, trim_data, create_derivative
+from FRIED_POTATO_preprocessing import trim_data, create_derivative
 from FRIED_POTATO_find_steps import find_steps_F, find_steps_PD, find_common_steps, calc_integral, save_figure
 from FRIED_POTATO_processMultiH5 import split_H5
-
 
 """define the functions of the subprocess processing the data"""
 
 
-def read_in_data(file_num, Files, input_text, input_checkbox):
-    if input_checkbox['CSV'] == 1:
-        df = pd.read_csv(Files[file_num])
-        directory_i = Path(Files[file_num])
-        filename_i = directory_i.name[:-4]
-        # access the raw data
-        Force = df.to_numpy()[:, 0]
-        if input_checkbox['length_measure'] == 1:
-            Distance = df.to_numpy()[:, 1]
-        else:
-            Distance = df.to_numpy()[:, 1] / 1000
-        # accessing the data frequency from user input
-        Frequency_value = input_text['frequency']  
-        Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
+class force_ramp_data():
+    def __init__(self, file_num, Files, input_text, input_checkbox):
+        self.directory_i = Path(Files[file_num])
+        self.filename_i = self.directory_i.stem
+        self.force_distance = np.empty((0, 2)) # initialize empty array with 2 columns
+        self.output = []
 
-    else:
-        with h5py.File(Files[file_num], "r") as f:
-            directory_i = Path(Files[file_num])
-            filename_i = directory_i.name[:-3]
+        if input_checkbox['CSV'] == 1:
+            self.df = pd.read_csv(Files[file_num])
 
             # access the raw data
-            if input_checkbox['HF'] == 1:
-                if input_checkbox['1x'] == 1:
-                    Force = f.get("Force HF/Force 1x")
-                elif input_checkbox['2x'] == 1:
-                    Force = f.get("Force HF/Force 2x")
-                Distance = f.get("Distance/Piezo Distance")
-                # accessing the data frequency from the h5 file
-                Frequency_value = Force.attrs['Sample rate (Hz)']
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
+            force = self.df.to_numpy()[:, 0]
+            if input_checkbox['nm'] == 1:
+                distance = self.df.to_numpy()[:, 1]
+            else:
+                distance = self.df.to_numpy()[:, 1] / 1000
+            # accessing the data frequency from user input
+            frequency_value = input_text['frequency']  
 
-            elif input_checkbox['LF'] == 1:
-                if input_checkbox['1x'] == 1:
-                    load_force = f.get("Force LF/Force 1x")
-                    Force = load_force[:]['Value'][:]
-                    try:
-                        load_distance = f.get("Distance/Distance 1x")[:]
-                    except:
-                        load_distance = f.get("Distance/Distance 2")[:]
-                    Distance = load_distance['Value'][:]
-                elif input_checkbox['2x'] == 1:
-                    load_force = f.get("Force LF/Force 2x")
-                    Force = load_force[:]['Value'][:]
-                    try:
-                        load_distance = f.get("Distance/Distance 2x")[:]
-                    except:
-                        load_distance = f.get("Distance/Distance 1")[:]
-                    Distance = load_distance['Value'][:]
+        else:
+            h5_file = lk.File(Files[file_num])
 
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_text, input_checkbox)
+            try:
+                if input_checkbox['1x']:
+                    force = h5_file['Force HF']['Force 1x'].data
+                elif input_checkbox['2x']:
+                    force = h5_file['Force HF']['Force 2x'].data
+                distance = h5_file['Distance']['Piezo Distance'].data
+            
+            except:
+                if input_checkbox['1x']:
+                    force = h5_file['Force LF']['Force 1x'].data
+                    distance = h5_file['Distance']['Distance 1x'].data
+                elif input_checkbox['2x']:
+                    force = h5_file['Force LF']['Force 2x'].data
+                    distance = h5_file['Distance']['Distance 2x'].data
 
-                # calculating the data frequency based on start- and end-time of the measurement
-                size_F_LF = len(Force)
-                stop_time_F_LF = load_force.attrs['Stop time (ns)']
-                timestamp_F_LF = load_force.attrs['Start time (ns)']
-                Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
+            #     # calculating the data frequency based on start- and end-time of the measurement
+            #     size_F_LF = len(force)
+            #     stop_time_F_LF = load_force.attrs['Stop time (ns)']
+            #     timestamp_F_LF = load_force.attrs['Start time (ns)']
+            #     Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
+            
+            # # accessing the data frequency from the h5 file
+            # frequency_value = force.attrs['Sample rate (Hz)']
+        self.force_distance = np.column_stack((force, distance))
+        self.output.append(f'Data points before preprocessing: {len(self.force_distance):,}')
+        self.preprocess_RAW(input_text, input_checkbox)
+        self.output.append(f'Data points after preprocessing: {len(self.force_distance):,}')
 
-    return Force_Distance, Force_Distance_um, Frequency_value, filename_i
+
+    def preprocess_RAW(self, input_text, input_checkbox):
+        if input_checkbox['aug'] == 1 and input_text['augment_factor'] != '':
+            # Augment data
+            new_f = []
+            new_d = []
+            factor = int(input_text['augment_factor'])
+
+            for line in range(len(self.force_distance) - 1):
+                f = self.force_distance[line, 0]
+                d = self.force_distance[line, 1]
+                new_f.append(f)
+                new_d.append(d)
+                f_next = self.force_distance[line + 1, 0]
+                d_next = self.force_distance[line + 1, 1]
+                delta_f = abs(f_next - f)
+                delta_d = abs(d_next - d)
+
+                for point in range(1, factor):
+                    mu = 0
+                    sigma_f = (1.5 * delta_f) / 3
+                    sigma_d = (1.5 * delta_d) / 3
+                    nf = np.random.normal(mu, sigma_f)
+                    nd = np.random.normal(mu, sigma_d)
+                    new_point_f = f + ((point + nf) / factor) * delta_f
+                    new_point_d = d + ((point + nd) / factor) * delta_d
+                    new_f.append(new_point_f)
+                    new_d.append(new_point_d)
+
+            self.force_distance[:, 0] = np.array(new_f)
+            self.force_distance[:, 1] = np.array(new_d)
+
+
+        if input_checkbox['prepro'] == 1:
+            # Downsample
+            self.force_distance = self.force_distance[::int(input_text['downsample'])]
+
+            # Filter
+            b, a = signal.butter(int(input_text['filter_degree']), float(input_text['filter_cut_off']))
+            self.force_distance = signal.filtfilt(b, a, self.force_distance, axis=0)
+
+# def read_in_data(file_num, Files, input_text, input_checkbox):
+#     if input_checkbox['CSV'] == 1:
+#         df = pd.read_csv(Files[file_num])
+#         directory_i = Path(Files[file_num])
+#         filename_i = directory_i.name[:-4]
+#         # access the raw data
+#         force = df.to_numpy()[:, 0]
+#         if input_checkbox['length_measure'] == 1:
+#             distance = df.to_numpy()[:, 1]
+#         else:
+#             distance = df.to_numpy()[:, 1] / 1000
+#         # accessing the data frequency from user input
+#         Frequency_value = input_text['frequency']  
+#         force_distance, force_distance_um = preprocess_RAW(force, distance, input_text, input_checkbox)
+
+#     else:
+#         h5_file = lk.File(Files[file_num]
+# )
+#         with h5py.File(Files[file_num], "r") as f:
+#             directory_i = Path(Files[file_num])
+#             filename_i = directory_i.name[:-3]
+
+#             # access the raw data
+#             if input_checkbox['HF'] == 1:
+#                 if input_checkbox['1x'] == 1:
+#                     force = f.get("force HF/force 1x")
+#                 elif input_checkbox['2x'] == 1:
+#                     force = f.get("force HF/force 2x")
+#                 distance = f.get("distance/Piezo distance")
+#                 # accessing the data frequency from the h5 file
+#                 Frequency_value = force.attrs['Sample rate (Hz)']
+#                 force_distance, force_distance_um = preprocess_RAW(force, distance, input_text, input_checkbox)
+
+#             elif input_checkbox['LF'] == 1:
+#                 if input_checkbox['1x'] == 1:
+#                     load_force = f.get("force LF/force 1x")
+#                     force = load_force[:]['Value'][:]
+#                     try:
+#                         load_distance = f.get("distance/distance 1x")[:]
+#                     except:
+#                         load_distance = f.get("distance/distance 2")[:]
+#                     distance = load_distance['Value'][:]
+#                 elif input_checkbox['2x'] == 1:
+#                     load_force = f.get("force LF/force 2x")
+#                     force = load_force[:]['Value'][:]
+#                     try:
+#                         load_distance = f.get("distance/distance 2x")[:]
+#                     except:
+#                         load_distance = f.get("distance/distance 1")[:]
+#                     distance = load_distance['Value'][:]
+
+#                 force_distance, force_distance_um = preprocess_RAW(force, distance, input_text, input_checkbox)
+
+#                 # calculating the data frequency based on start- and end-time of the measurement
+#                 size_F_LF = len(force)
+#                 stop_time_F_LF = load_force.attrs['Stop time (ns)']
+#                 timestamp_F_LF = load_force.attrs['Start time (ns)']
+#                 Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
+
+#     return force_distance, force_distance_um, Frequency_value, filename_i
 
 
 # open a folder containing raw data and lead through the analysis process
@@ -126,22 +220,22 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
             output_q.put('Hard work ahead!')
 
         # proceed differently with h5 and csv files
-        Force_Distance, Force_Distance_um, Frequency_value, filename = read_in_data(file_num, Files, input_settings, input_format)
+        force_distance, force_distance_um, Frequency_value, filename = read_in_data(file_num, Files, input_settings, input_format)
 
         num_curves = 1
 
         ###### Detect MultiFiles ######
         if input_format['MultiH5'] == 1:
             try:
-                fw_curves, rv_curves = split_H5(Force_Distance, input_settings, Frequency_value)
+                fw_curves, rv_curves = split_H5(force_distance, input_settings, Frequency_value)
                 num_fw = len(fw_curves)
                 fw_curves.extend(rv_curves)
                 curves = fw_curves
             except:
                 print('No Multi-File detected!')
-                curves = [Force_Distance]
+                curves = [force_distance]
         else:
-            curves = [Force_Distance]
+            curves = [force_distance]
 
         num_curves = len(curves)
 
@@ -184,27 +278,27 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     suffix = 'rv_curve{num}'.format(num=x + 1 - num_fw)
                     filename_i = filename + '_' + suffix
 
-            Force_Distance = curves[x][:, :2]
-            print('################ FD', len(Force_Distance))
-            Force_Distance_um = np.copy(Force_Distance)
-            Force_Distance_um[:, 1] = Force_Distance_um[:, 1] / 1000
+            force_distance = curves[x][:, :2]
+            print('################ FD', len(force_distance))
+            force_distance_um = np.copy(force_distance)
+            force_distance_um[:, 1] = force_distance_um[:, 1] / 1000
         ###### Detect MultiFiles end ######
 
             orientation = "forward"
-            if Force_Distance[0, 1] > Force_Distance[-1, 1]:  # reverse
+            if force_distance[0, 1] > force_distance[-1, 1]:  # reverse
                 orientation = "reverse"
-                Force_Distance = np.flipud(Force_Distance)
-                Force_Distance_um = np.flipud(Force_Distance_um)
+                force_distance = np.flipud(force_distance)
+                force_distance_um = np.flipud(force_distance_um)
 
             # Export down sampled and smoothened FD values
             if export_data['export_SMOOTH'] == 1:
                 save_to = analysis_folder + "/" + filename_i + "_smooth_" + timestamp + ".csv"
-                np.savetxt(save_to, Force_Distance_um, delimiter=",")
+                np.savetxt(save_to, force_distance_um, delimiter=",")
             else:
                 pass
 
             # trim data below specified force thresholds
-            F_trimmed, PD_trimmed, F_low = trim_data(Force_Distance, input_settings['F_min'])
+            F_trimmed, PD_trimmed, F_low = trim_data(force_distance, input_settings['F_min'])
             print('#################### Trimmmed', len(F_trimmed))
             if not F_trimmed.size == 0:
                 # create force and distance derivative of the pre-processed data to be able to identify steps
@@ -217,7 +311,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 results_F, PD_start_F = find_steps_F(
                     input_settings,
                     filename_i,
-                    Force_Distance,
+                    force_distance,
                     derivative_array,
                     orientation
                 )
@@ -235,7 +329,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 # except:
                 #     results_F = []
                 #     PD_start_F = []
-                #     print("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding Force steps')
+                #     print("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding force steps')
                 #     pass
 
                 """find steps based on distance derivative"""
@@ -244,7 +338,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     results_PD, PD_start_PD = find_steps_PD(
                         input_settings,
                         filename_i,
-                        Force_Distance,
+                        force_distance,
                         derivative_array,
                         orientation
                     )
@@ -260,7 +354,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 except:
                     results_PD = []
                     PD_start_PD = []
-                    err_PD = str("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding Distance steps')
+                    err_PD = str("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding distance steps')
                     print(err_PD)
                     pass
 
@@ -270,7 +364,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     timestamp,
                     filename_i,
                     analysis_folder,
-                    Force_Distance,
+                    force_distance,
                     derivative_array,
                     F_trimmed,
                     PD_trimmed,
@@ -344,7 +438,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                         float(common_steps[0]['step start']),
                                         float(common_steps[-1]['step end']),
                                         max(derivative_array[:, 1]),
-                                        Force_Distance,
+                                        force_distance,
                                         derivative_array,
                                         F_low,
                                         0
@@ -357,7 +451,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             input_fitting,
                                             float(0),
                                             float(common_steps[0]['step start']),
-                                            Force_Distance,
+                                            force_distance,
                                             1,
                                             1,
                                             derivative_array,
@@ -389,7 +483,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     export_data,
                                     input_fitting,
                                     float(common_steps[0]['step start']),
-                                    Force_Distance,
+                                    force_distance,
                                     derivative_array,
                                     F_low,
                                     0
@@ -416,7 +510,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             input_fitting,
                                             float(common_steps[n]['step end']),
                                             float(common_steps[n + 1]['step start']),
-                                            Force_Distance,
+                                            force_distance,
                                             1,
                                             1,
                                             derivative_array,
@@ -447,7 +541,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     input_fitting,
                                     float(common_steps[len(common_steps) - 1]['step end']),
                                     max(derivative_array[:, 1]),
-                                    Force_Distance,
+                                    force_distance,
                                     1,
                                     1,
                                     derivative_array,
@@ -517,7 +611,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     export_data,
                                     input_fitting,
                                     derivative_array[-1, 1],
-                                    Force_Distance,
+                                    force_distance,
                                     derivative_array,
                                     F_low,
                                     0
@@ -539,7 +633,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         #total_results_fit = total_results_fit.append(export_fit, ignore_index=True, sort=False)
                        
                         # create a plot for the fitted curve
-                        plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, analysis_folder, filename_i, timestamp)
+                        plot_fit(fit, start_force_ss, start_distance_ss, force_distance, analysis_folder, filename_i, timestamp)
                         
                     except Exception as e:
                         print(f"Error: {e}")
@@ -594,8 +688,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 print(filename_i)
                 output_q.put(filename_i)
             else:
-                print('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
-                output_q.put('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
+                print('This curve was below the force threshold and could not be processed!\nPlease check if the correct trap was selected.')
+                output_q.put('This curve was below the force threshold and could not be processed!\nPlease check if the correct trap was selected.')
 
 
         if file_num == int(len(Files) / 2):
