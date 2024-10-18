@@ -1,3 +1,4 @@
+"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
 
 from matplotlib.figure import Figure
 

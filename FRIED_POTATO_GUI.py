@@ -1,7 +1,8 @@
-"""Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH"""
+"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
 
-""" POTATO -- 2022-12-13 -- Version 1.6
-    Developed by Lukáš Pekárek and Stefan Buck at the Helmholtz Institute for RNA-based Infection Research
+""" FRIED POTATO -- 2024-10-18 -- Version 1.0
+    Developed by Lukáš Pekárek (LP) and Stefan Buck (SB)
+    Based on the original POTATO developed by LP and SB at the Helmholtz Institute for RNA-based Infection Research
     In the research group REMI - Recoding Mechanisms in Infections
     Supervisor - Jun. Prof. Neva Caliskan """
 """ This script processes Force-Distance Optical Tweezers data in an automated way, to find unfolding events """

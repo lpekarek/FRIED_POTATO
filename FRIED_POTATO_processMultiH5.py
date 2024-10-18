@@ -1,4 +1,5 @@
-"""Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH"""
+"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
+
 
 import pandas as pd
 import numpy as np

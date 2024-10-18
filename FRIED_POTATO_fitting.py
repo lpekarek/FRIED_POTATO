@@ -1,4 +1,5 @@
-"""Copyright 2021 Helmholtz-Zentrum für Infektionsforschung GmbH"""
+"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
+
 
 import matplotlib.pyplot as plt
 import lumicks.pylake as lk
