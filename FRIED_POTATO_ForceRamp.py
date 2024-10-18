@@ -555,17 +555,17 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         
                         pass
                 
-                print("total results steps are:")
-                print(total_results_steps)
+                #print("total results steps are:")
+                #print(total_results_steps)
 
 
 
-                print("total results fits are:")
-                print(total_results_fit)
+                #print("total results fits are:")
+                #print(total_results_fit)
 
                 # Remove the last three columns
                 #total_results_fit = total_results_fit.iloc[:, :-3]
-
+            if common_steps:
                 # Calculate delta LC
                 total_results_fit['delta Lc'] = total_results_fit['Lc_ss'].diff().fillna("#N/A")
 
@@ -586,8 +586,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 #total_results_fit = pd.concat([total_results_fit.iloc[:, :insert_pos], total_results_fit[['delta Lc', 'total Lc', 'total W']], total_results_fit.iloc[:, insert_pos:]], axis=1)
 
 
-                print("total results fits are:")
-                print(total_results_fit)
+                #print("total results fits are:")
+                #print(total_results_fit)
 
 
 

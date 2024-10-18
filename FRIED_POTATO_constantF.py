@@ -49,7 +49,7 @@ def get_constantF(input_settings, input_format, input_constantF):
                 Distance_1x = f.get("Distance/Piezo Distance")
                 # accessing the data frequency from the h5 file
                 Frequency_value = Force_1x.attrs['Sample rate (Hz)']
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force_1x, Distance_1x, input_settings)
+                Force_Distance, Force_Distance_um = preprocess_RAW(Force_1x, Distance_1x, input_settings, input_format)
 
             elif input_format['LF'] == 1:
                 load_force = f.get("Force LF/Force 1x")
@@ -109,6 +109,8 @@ def display_constantF(FD, FD_um, frequency, input_settings, input_constantF):
     y_min = input_constantF['y min']
     y_max = input_constantF['y max']
 
+ 
+
     filteredDistance = FD_um[:, 1]
     time_Distance = range(0, len(filteredDistance) * input_settings['downsample_value'], input_settings['downsample_value'])
     time_vector_D = range(0, len(filteredDistance) * input_settings['downsample_value'], input_settings['downsample_value'])
@@ -120,6 +122,12 @@ def display_constantF(FD, FD_um, frequency, input_settings, input_constantF):
     Distance_time = []
     for t in time_Distance:
         Distance_time.append(t / int(frequency))
+
+    x_min = 0
+    x_max = max(time_D)+5
+    y_min = min(FD[:,1])-10
+    y_max = max(FD[:,1])+10
+    
 
     # create a Figure
     Figure_constantF, (ax_scatter, ax_histy) = plt.subplots(1, 2, gridspec_kw={'width_ratios': [3, 1]}, sharey=True)

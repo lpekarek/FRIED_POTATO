@@ -447,6 +447,11 @@ def display_RAW_FD(processed_F, processed_D, raw_F, raw_D, filename):
 
 
 def start_constantF():
+    global fig_constantF_tk
+    try:
+       fig_constantF_tk.get_tk_widget().destroy()
+    except:
+        pass
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     Force_Distance, Force_Distance_um, frequency, filename, analysis_path, timestamp = get_constantF(input_settings, input_format, input_constantF)
     fig_constantF, hist_D, filteredDistance_ready = display_constantF(Force_Distance, Force_Distance_um, frequency, input_settings, input_constantF)
@@ -460,6 +465,12 @@ def start_constantF():
 
 
 def show_constantF():
+    global fig_constantF_tk
+    try:
+       fig_constantF_tk.get_tk_widget().destroy()
+    except:
+        pass
+    
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     Force_Distance, Force_Distance_um, frequency, filename, analysis_path, timestamp = get_constantF(input_settings, input_format, input_constantF)
     fig_constantF, hist_D, filteredDistance_ready = display_constantF(Force_Distance, Force_Distance_um, frequency, input_settings, input_constantF)
