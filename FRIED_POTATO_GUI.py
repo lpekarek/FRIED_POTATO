@@ -504,7 +504,7 @@ def open_folder():
 
     # ask wich directory should be analysed
     folder = tk.filedialog.askdirectory()
-    root.title('POTATO -- ' + str(folder))
+    root.title('FRIED POTATO -- ' + str(folder))
 
     # decide which input format was choosen
     if input_format['CSV'] == 1:
@@ -747,7 +747,7 @@ def analyze_steps():
 
             # plot the marked regions and fits
             # model data
-            F_ss_model = ss_fit_dict_TOMATO['model_ss'](distance, fit_ss.params)
+            F_ss_model = ss_fit_dict_TOMATO['model_ss_TOMATO'](distance, fit_ss.params)
 
             # plot the marked ss region and fits
             subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[i])
@@ -834,7 +834,7 @@ def analyze_steps():
 
     # plot the marked regions and fits
     # model data
-    F_ss_model = ss_fit_dict_TOMATO['model_ss'](distance, fit_ss.params)
+    F_ss_model = ss_fit_dict_TOMATO['model_ss_TOMATO'](distance, fit_ss.params)
 
     # plot the marked ss region and fits
     subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[j + 1])

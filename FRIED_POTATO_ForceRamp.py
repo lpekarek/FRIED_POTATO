@@ -602,9 +602,12 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 print(filename_i)
                 output_q.put(filename_i)
             else:
+                results_total_total = pd.concat([total_results_steps, total_results_fit], axis=1)
+                results_total_total.to_csv((filename_total_results), mode='a', index=False, header=False)
+
                 print('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
                 output_q.put('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
-
+               
 
         if file_num == int(len(Files) / 2):
             print('\nHalf way there!\n')
