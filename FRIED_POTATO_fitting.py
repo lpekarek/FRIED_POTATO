@@ -98,7 +98,8 @@ def fitting_ds(filename_i, input_settings, export_data, input_fitting, i_start, 
         'Lp_ds_stderr': fit_ds["ds_part/Lp"].stderr,
         'St_ds': fit_ds["ds_part/St"].value,
         'f_offset': fit_ds["ds_part/f_offset"].value,
-        'd_offset': fit_ds["ds_part/d_offset"].value
+        'd_offset': fit_ds["ds_part/d_offset"].value,
+        'Lc_ss':0
     }
     print(ds_fit_dict)
     return ds_fit_dict, area_ds, start_step1
