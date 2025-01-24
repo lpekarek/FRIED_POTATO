@@ -32,14 +32,14 @@ doi: https://doi.org/10.1101/2021.11.11.468103
 
 
 ***Dependencies***
-
+Yaml file allowing to create the working python (conda) environment with correct package versions is provided.
 Python3
 Packages:
   csv,
   glob,
   h5py,
   json,
-  lumicks.pylake (v0.12.1),
+  lumicks.pylake,
   matplotlib,
   multiprocessing,
   numpy,
