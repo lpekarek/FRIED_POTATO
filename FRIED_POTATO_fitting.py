@@ -559,7 +559,45 @@ def fitting_ss(filename_i, input_settings, export_data, input_fitting, i_start, 
 
     return fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict, area_ss_fit_start, area_ss_fit_end
 
+def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, save_folder, filename_i, start_time):
+    distance = np.arange(min(Force_Distance[:, 1]), max(Force_Distance[:, 1]) + 50, 2)
+    F_ds_model = model_ds(distance, fit_ds.params)
+    
+    legend_elements = [
+        Line2D([0], [0], color='k', lw=1, alpha=0.85),
+        Line2D([0], [0], color='gray', linestyle='dashed', lw=1)
+    ]
 
+    diff_colors = ['b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm']
+
+    plt.plot(Force_Distance[:, 1], Force_Distance[:, 0], 'k', alpha=0.85)
+    plt.axis([min(Force_Distance[:, 1]) - 50, max(Force_Distance[:, 1]) + 50, 0, max(Force_Distance[:, 0]) + 15])
+    plt.scatter(d_fitting_region_ds, f_fitting_region_ds, color=diff_colors[0], s=4)
+    plt.plot(distance, F_ds_model, linestyle='dashed', color=diff_colors[0], linewidth=0.5, alpha=0.85)
+    plt.ylabel("Force [pN]")
+    plt.xlabel("Distance [nm]")
+    plt.legend(legend_elements, ['FD-Curve', 'Part used for fitting', 'Fitted WLC model'])
+    
+    fit_data = {"distance": distance, "Fit_ds": F_ds_model}
+    
+    for i in range(len(fit)):
+        F_ss_model = model_ss(distance, fit[i].params)
+        plt.scatter(start_distance_ss[i], start_force_ss[i], s=4, color=diff_colors[i+1])
+        plt.plot(distance, F_ss_model, linestyle='dashed', color=diff_colors[i+1], linewidth=0.5, alpha=0.85)
+        fit_data[f"Fit_ss_{i+1}"] = F_ss_model
+    
+    # Save plot
+    plotname = f"{save_folder}/{filename_i}_fit_{start_time}.png"
+    plt.savefig(plotname, dpi=600)
+    plt.clf()
+    
+    # Save fit data to CSV
+    fit_df = pd.DataFrame(fit_data)
+    csv_filename = f"{save_folder}/{filename_i}_fit_data_{start_time}.csv"
+    fit_df.to_csv(csv_filename, index=False)
+    print(f"Fit data saved to {csv_filename}")
+
+"""
 def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, save_folder, filename_i, start_time):
     distance = np.arange(min(Force_Distance[:, 1]), max(Force_Distance[:, 1]) + 50, 2)
     F_ds_model = model_ds(distance, fit_ds.params)
@@ -589,3 +627,4 @@ def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, save_folder
 
     plt.savefig(plotname, dpi=600)
     plt.clf()
+"""
