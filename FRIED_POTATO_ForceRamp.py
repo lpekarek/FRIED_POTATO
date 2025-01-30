@@ -142,9 +142,10 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         if input_format['MultiH5'] == 1:
             try:
                 fw_curves, rv_curves = split_H5(Force_Distance, input_settings, Frequency_value)
+                print(fw_curves, rv_curves)
                 num_fw = len(fw_curves)
-                fw_curves.extend(rv_curves)
-                curves = fw_curves
+                #fw_curves.extend(rv_curves)
+                curves = np.append(fw_curves, rv_curves)
             except:
                 print('No Multi-File detected!')
                 curves = [Force_Distance]
