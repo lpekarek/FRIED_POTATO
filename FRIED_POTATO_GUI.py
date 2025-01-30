@@ -499,6 +499,7 @@ def open_folder():
     global TOMATO_fig1
     global Files
     global FD_number
+    global folder
     # check user input
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
@@ -628,6 +629,7 @@ def save_step():
         print('Please make sure step start and step end are selected!')
 
 
+
 def analyze_steps():
     global TOMATO_fig1
     global subplot1
@@ -652,7 +654,7 @@ def analyze_steps():
     subplot1 = figure1.add_subplot(111)
     subplot1.plot(Force_Distance_TOMATO[:, 1], Force_Distance_TOMATO[:, 0], color='gray')
     distance = np.arange(min(Force_Distance_TOMATO[:, 1]), max(Force_Distance_TOMATO[:, 1]) + 50, 2)
-
+    fit_data = {"distance": distance}
     export_fit = []
     fit = []
     start_force_ss = []
@@ -698,6 +700,7 @@ def analyze_steps():
             export_fit.append(ds_fit_dict_TOMATO)
 
             F_ds_model = ds_fit_dict_TOMATO['model_ds'](distance, ds_fit_dict_TOMATO['fit_model'].params)
+            fit_data["Fit_ds"] = F_ds_model
             # plot the marked ds region and fits
             subplot1.plot(Force_Distance_TOMATO[:, 1][:real_step_start], Force_Distance_TOMATO[:, 0][:real_step_start], color=diff_colors[i])
             subplot1.plot(distance, F_ds_model, marker=None, linestyle='dashed', linewidth=1, color="black")
@@ -748,7 +751,7 @@ def analyze_steps():
             # plot the marked regions and fits
             # model data
             F_ss_model = ss_fit_dict_TOMATO['model_ss_TOMATO'](distance, fit_ss.params)
-
+            fit_data[f"Fit_ss_{i}"] = F_ss_model
             # plot the marked ss region and fits
             subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[i])
             subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
@@ -835,10 +838,17 @@ def analyze_steps():
     # plot the marked regions and fits
     # model data
     F_ss_model = ss_fit_dict_TOMATO['model_ss_TOMATO'](distance, fit_ss.params)
-
+    fit_data[f"Fit_ss_{i}"] = F_ss_model
     # plot the marked ss region and fits
     subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[j + 1])
     subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
+
+    fit_df = pd.DataFrame(fit_data)
+    csv_filename = f"{filename_TOMATO}_fit_data_{timestamp}.csv"
+    csv_filename_with_path = os.path.join(folder, csv_filename)
+    fit_df.to_csv(csv_filename_with_path, index=False)
+    print(f"Fit data saved to {csv_filename}")  
+
 
     subplot1.set_ylim([min(Force_Distance_TOMATO[:, 0]), max(Force_Distance_TOMATO[:, 0])])
     subplot1.set_xlim([min(Force_Distance_TOMATO[:, 1]) - 10, max(Force_Distance_TOMATO[:, 1]) + 10])
