@@ -457,7 +457,7 @@ def start_constantF():
     Force_Distance, Force_Distance_um, frequency, filename, analysis_path, timestamp = get_constantF(input_settings, input_format, input_constantF)
     fig_constantF, hist_D, filteredDistance_ready = display_constantF(Force_Distance, Force_Distance_um, frequency, input_settings, input_constantF)
     os.mkdir(analysis_path)
-    export_settings(analysis_path, timestamp, input_settings, input_constantF)
+    export_settings(analysis_path, timestamp, input_settings, input_constantF, input_format)
     fig_constantF = fit_constantF(hist_D, Force_Distance, filteredDistance_ready, frequency, input_settings, input_constantF, filename, timestamp)
     fig_constantF_tk = FigureCanvasTkAgg(fig_constantF, figure_frame_tab4)
     fig_constantF_tk.get_tk_widget().grid(row=0, column=0, sticky='wens')
