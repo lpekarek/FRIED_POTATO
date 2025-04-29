@@ -35,10 +35,16 @@ from FRIED_POTATO_fitting import fitting_ds, fitting_ss
 from FRIED_POTATO_find_steps import calc_integral
 
 # To avoid blurry GUI - DPI scaling
-import ctypes
-awareness = ctypes.c_int()
-errorCode = ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
-errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(1)
+import platform
+
+system_platform = platform.system()
+print(f"Running on {system_platform}")
+
+if system_platform == "Windows":
+    import ctypes
+    awareness = ctypes.c_int()
+    errorCode = ctypes.windll.shcore.GetProcessDpiAwareness(0, ctypes.byref(awareness))
+    errorCode = ctypes.windll.shcore.SetProcessDpiAwareness(1)
 
 
 """define the functions used in the GUI"""
