@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from scipy.integrate import simps
 from matplotlib.lines import Line2D
-
+import matplotlib.patches as patches
 
 """define the functions used for fitting"""
 
@@ -570,13 +570,19 @@ def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, save_folder
 
     diff_colors = ['b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm', 'b', 'r', 'c', 'g', 'y', 'm']
 
+    font_size = 20
+    line_thickness = 2
+    min_x_value, max_x_value = min(Force_Distance[:, 1])-10, max(Force_Distance[:, 1])+10
+    min_y_value, max_y_value = -1 , max(Force_Distance[:, 0])+3
+    Plot_title=filename_i
+
     plt.plot(Force_Distance[:, 1], Force_Distance[:, 0], 'k', alpha=0.85)
     plt.axis([min(Force_Distance[:, 1]) - 50, max(Force_Distance[:, 1]) + 50, 0, max(Force_Distance[:, 0]) + 15])
     plt.scatter(d_fitting_region_ds, f_fitting_region_ds, color=diff_colors[0], s=4)
     plt.plot(distance, F_ds_model, linestyle='dashed', color=diff_colors[0], linewidth=0.5, alpha=0.85)
-    plt.ylabel("Force [pN]")
-    plt.xlabel("Distance [nm]")
-    plt.legend(legend_elements, ['FD-Curve', 'Part used for fitting', 'Fitted WLC model'])
+    plt.xlabel('Relative distance, nm', fontsize=font_size)
+    plt.ylabel('Force, pN', fontsize=font_size)
+    plt.legend(legend_elements, ['FD-Curve', 'Part used for fitting', 'Fitted WLC model'], fontsize=12)
     
     fit_data = {"distance": distance, "Fit_ds": F_ds_model}
     
@@ -586,9 +592,55 @@ def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, save_folder
         plt.plot(distance, F_ss_model, linestyle='dashed', color=diff_colors[i+1], linewidth=0.5, alpha=0.85)
         fit_data[f"Fit_ss_{i+1}"] = F_ss_model
     
+
+  
+
+
+    plt.title(Plot_title, fontsize=12)
+
+    # Set the tick and axis properties
+    ax = plt.gca()  # Get current axis
+    ax.spines['top'].set_linewidth(2)    # Set the width of the top spine
+    ax.spines['right'].set_linewidth(2)  # Set the width of the right spine
+    ax.spines['left'].set_linewidth(2)   # Set the width of the left spine
+    ax.spines['bottom'].set_linewidth(2) # Set the width of the bottom spine
+    ax.spines['top'].set_color('white') 
+    ax.spines['right'].set_color('white')
+
+    # Add a scale bar
+    scalebar_length = 100  # Length of the scale bar in x-axis units
+    scalebar_height = 0.01 * (max_y_value - min_y_value)  # Relative height of the scale bar
+    scalebar_x_position = max_x_value-scalebar_length*1.001  # Position of the scale bar on the x-axis
+    scalebar_y_position = min_y_value + scalebar_height * 2  # Position on the y-axis
+
+
+    # Create a rectangle patch as a scale bar
+    scalebar = patches.Rectangle((scalebar_x_position, scalebar_y_position), scalebar_length, scalebar_height, color='black')
+
+    # Add the patch to the axes
+    plt.gca().add_patch(scalebar)
+
+
+    # Customizing tick parameters
+    plt.tick_params(axis='both', which='major', labelsize=font_size, direction='in', length=6, width=2)
+    #plt.tick_params(axis='both', which='minor', direction='in', length=4, width=1)
+    # Hide x-axis labels and ticks
+    plt.tick_params(axis='x', which='both', labelbottom=False, direction='in', length=6, width=2)
+    # Optionally add text to label the scale bar
+    plt.text(scalebar_x_position+scalebar_length/2, scalebar_y_position + scalebar_height * 2, f'{scalebar_length} nm', fontsize=font_size, ha='center')
+
+
+    # Set axis limits
+    plt.xlim(min_x_value, max_x_value)  # Set the range for the x-axis
+    plt.ylim(min_y_value, max_y_value)  # Set the range for the y-axis
+
+
+
     # Save plot
     plotname = f"{save_folder}/{filename_i}_fit_{start_time}.png"
+    plotname_svg = f"{save_folder}/{filename_i}_fit_{start_time}.svg"
     plt.savefig(plotname, dpi=600)
+    plt.savefig(plotname_svg, format='svg')
     plt.clf()
     
     # Save fit data to CSV

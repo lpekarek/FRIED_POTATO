@@ -224,8 +224,12 @@ def fit_constantF(hist_D, FD, filteredDistance_ready, frequency, input_settings,
     # plots
     plotname2 = analysis_folder + "/" + filename_i + "_histogram_fitted" + ".png"
     figure2.savefig(plotname2)
+    plotname2_svg = analysis_folder + "/" + filename_i + "_histogram_fitted" + ".svg"
+    figure2.savefig(plotname2_svg)
 
     plotname_figure_constant_f = analysis_folder + "/" + filename_i + "_visualization" + ".png"
     Figure_constantF.savefig(plotname_figure_constant_f)
+    plotname_figure_constant_f_svg = analysis_folder + "/" + filename_i + "_visualization" + ".svg"
+    Figure_constantF.savefig(plotname_figure_constant_f_svg)
 
     return figure2

@@ -323,15 +323,112 @@ def calc_integral(area_1, area_2, step_start_d, step_end_d, step_start_f, step_e
 
     return work_step, work_in_kT
 
-
 def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Distance, derivative_array, F_trimmed, PD_trimmed, PD_start_F, PD_start_PD):
-    figure1 = Figure(figsize=(10, 6), dpi=100)
+    import matplotlib.pyplot as plt
+    from matplotlib.figure import Figure
+    from matplotlib.lines import Line2D
+    import matplotlib.patches as patches
+
+    figure1 = Figure(figsize=(12, 10), dpi=100)
     subplot1 = figure1.add_subplot(221)
     subplot2 = figure1.add_subplot(222)
     subplot3 = figure1.add_subplot(223)
     subplot4 = figure1.add_subplot(224)
 
-    subplot1.set_ylabel("Force (pN)")
+    font_size = 12
+    axis_linewidth = 2
+    min_y_value = 0
+    max_y_value = max(Force_Distance[:, 0])
+    min_x_value = min(Force_Distance[:, 1])
+    max_x_value = max(Force_Distance[:, 1])
+
+    # Set overall title
+    figure1.suptitle(filename_i, fontsize=font_size + 4)
+
+    # Subplot 1
+    subplot1.set_ylabel("Force, pN", fontsize=font_size)
+    subplot1.set_xlabel("Distance, nm", fontsize=font_size)
+    subplot1.set_title("FD-Curve", fontsize=font_size + 2)
+    subplot1.scatter(Force_Distance[:, 1], Force_Distance[:, 0], marker='.', s=0.6, linewidths=None, alpha=1)
+
+    # Format subplot1
+    for spine in subplot1.spines.values():
+        spine.set_linewidth(axis_linewidth)
+    subplot1.spines['top'].set_color('white')
+    subplot1.spines['right'].set_color('white')
+    subplot1.tick_params(axis='both', which='major', labelsize=font_size, direction='in', length=6, width=axis_linewidth)
+    subplot1.tick_params(axis='x', which='both')
+
+    # Add scalebar to subplot1
+    scalebar_length = 100
+    scalebar_height = 0.01 * (max_y_value - min_y_value)
+    scalebar_x_position = max_x_value - scalebar_length * 1.001
+    scalebar_y_position = min_y_value + scalebar_height * 2
+    scalebar = patches.Rectangle((scalebar_x_position, scalebar_y_position), scalebar_length, scalebar_height, color='black')
+    subplot1.add_patch(scalebar)
+    subplot1.text(scalebar_x_position + scalebar_length / 2, scalebar_y_position + scalebar_height * 2, f'{scalebar_length} nm', fontsize=font_size, ha='center')
+
+    # Subplot 2
+    subplot2.set_title("Trimmed FD-Curve - steps marked", fontsize=font_size + 2)
+    legend_elements = [
+        Line2D([0], [0], color='red', lw=1),
+        Line2D([0], [0], color='green', lw=1)
+    ]
+    subplot2.legend(legend_elements, ['Steps found by F-derivative', 'Steps found by D-derivative'], fontsize=font_size)
+    subplot2.scatter(PD_trimmed, F_trimmed, marker='.', s=0.6, linewidths=None, alpha=1)
+    for i in range(len(PD_start_F)):
+        subplot2.axvline(x=PD_start_F[i], ymin=0, ymax=30, color='red', lw=0.5, alpha=0.5)
+    for i in range(len(PD_start_PD)):
+        subplot2.axvline(x=PD_start_PD[i], ymin=0, ymax=30, color='green', lw=0.5, alpha=0.5)
+    for spine in subplot2.spines.values():
+        spine.set_linewidth(axis_linewidth)
+    subplot2.spines['top'].set_color('white')
+    subplot2.spines['right'].set_color('white')
+    subplot2.set_ylabel("Force, pN", fontsize=font_size)
+    subplot2.set_xlabel("Distance, nm", fontsize=font_size)
+    subplot2.tick_params(axis='both', which='major', labelsize=font_size, direction='in', length=6, width=axis_linewidth)
+
+    # Subplot 3
+    subplot3.set_xlabel("Distance, nm", fontsize=font_size)
+    subplot3.set_ylabel("delta Distance, nm/ms", fontsize=font_size)
+    subplot3.set_title("Distance derivative", fontsize=font_size + 2)
+    subplot3.plot(derivative_array[:, 1], derivative_array[:, 3])
+    subplot3.plot(derivative_array[:, 1], y_vector_PD)
+    subplot3.fill_between(derivative_array[:, 1], PD_mm2_STD2_positive, PD_mm2_STD2_negative, color='black', alpha=0.30)
+    for spine in subplot3.spines.values():
+        spine.set_linewidth(axis_linewidth)
+    subplot3.spines['top'].set_color('white')
+    subplot3.spines['right'].set_color('white')
+    subplot3.tick_params(axis='both', which='major', labelsize=font_size, direction='in', length=6, width=axis_linewidth)
+
+    # Subplot 4
+    subplot4.set_xlabel("Distance, nm", fontsize=font_size)
+    subplot4.set_ylabel("delta Force, pN/ms", fontsize=font_size)
+    subplot4.set_title("Force derivative", fontsize=font_size + 2)
+    subplot4.plot(derivative_array[:, 1], derivative_array[:, 2])
+    subplot4.plot(derivative_array[:, 1], y_vector_F)
+    subplot4.fill_between(derivative_array[:, 1], list(F_mm2_STD2_positive), list(F_mm2_STD2_negative), color='black', alpha=0.30)
+    for spine in subplot4.spines.values():
+        spine.set_linewidth(axis_linewidth)
+    subplot4.spines['top'].set_color('white')
+    subplot4.spines['right'].set_color('white')
+    subplot4.tick_params(axis='both', which='major', labelsize=font_size, direction='in', length=6, width=axis_linewidth)
+
+    if export_PLOT == 1:
+        plotname = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".png"
+        figure1.savefig(plotname, dpi=600)
+        plotname_svg = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".svg"
+        figure1.savefig(plotname_svg, format='svg')
+
+    figure1.clf()
+"""def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Distance, derivative_array, F_trimmed, PD_trimmed, PD_start_F, PD_start_PD):
+    figure1 = Figure(figsize=(12, 8), dpi=100)
+    subplot1 = figure1.add_subplot(221)
+    subplot2 = figure1.add_subplot(222)
+    subplot3 = figure1.add_subplot(223)
+    subplot4 = figure1.add_subplot(224)
+
+    subplot1.set_ylabel("Force, pN")
     subplot1.set_title("FD-Curve")
     subplot1.scatter(Force_Distance[:, 1], Force_Distance[:, 0], marker='.', s=0.6, linewidths=None, alpha=1)
 
@@ -349,16 +446,16 @@ def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Dista
     for i in range(len(PD_start_PD)):
         subplot2.axvline(x=PD_start_PD[i], ymin=0, ymax=30, color='green', lw=0.5, alpha=0.5)
 
-    subplot3.set_xlabel("Distance (nm)")
-    subplot3.set_ylabel("delta Distance (nm/ms)")
+    subplot3.set_xlabel("Distance, nm")
+    subplot3.set_ylabel("delta Distance, nm/ms")
     subplot3.set_title("Distance derivative")
     subplot3.plot(derivative_array[:, 1], derivative_array[:, 3])
 
     subplot3.plot(derivative_array[:, 1], y_vector_PD)
     subplot3.fill_between(derivative_array[:, 1], PD_mm2_STD2_positive, PD_mm2_STD2_negative, color='black', alpha=0.30)
 
-    subplot4.set_xlabel("Distance (nm)")
-    subplot4.set_ylabel("delta Force (pN/ms)")
+    subplot4.set_xlabel("Distance, nm")
+    subplot4.set_ylabel("delta Force, pN/ms")
     subplot4.set_title("Force derivative")
     subplot4.plot(derivative_array[:, 1], derivative_array[:, 2])
 
@@ -368,7 +465,10 @@ def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Dista
     if export_PLOT == 1:
         plotname = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".png"
         figure1.savefig(plotname, dpi=600)
+        plotname_svg = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".svg"
+        figure1.savefig(plotname_svg, format = 'svg')
     else:
         pass
 
     figure1.clf()
+"""
