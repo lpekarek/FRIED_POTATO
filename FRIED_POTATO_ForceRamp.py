@@ -144,6 +144,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 fw_curves, rv_curves = split_H5(Force_Distance, input_settings, Frequency_value)
                 print(fw_curves, rv_curves)
                 num_fw = len(fw_curves)
+                if len(rv_curves) == 0 or len(fw_curves) == 0:
+                    raise  ValueError('No forward or no reverse curve found!')
                 #fw_curves.extend(rv_curves)
                 curves = np.append(fw_curves, rv_curves)
             except:
