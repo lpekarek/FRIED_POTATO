@@ -15,6 +15,11 @@ def STD(input_data, column_number):
 
 # creates a moving median of the dataset, therefore using slices of len(window_size)
 def moving_median(input_data, column_number, window_size):
+    # if window_size larger than input_data, an array of window_size is returned -> Error downstream
+    if window_size > len(input_data):
+        print(f'!!! WARNING: to compete moving median window_size ({window_size}) is larger than dataset ({len(input_data)})!!!')
+        window_size = len(input_data) # -1????
+
     # window_half so that the moving median is dependent of values left AND right
     window_half = int(window_size / 2)
     # window vector defines everything from [window_half:-window_half]
@@ -229,7 +234,7 @@ def find_steps_PD(input_settings, filename_i, Force_Distance, der_arr, orientati
     if STD_1 < 0.05:
         STD_1 = 0.05
 
-    print('STD is', STD_1)
+    print(f'STD is {STD_1}')
 
     Above, Inside, Below, inside_indices_PD = cut_off(der_arr, 3, PD_mm, STD_1, input_settings['z-score_d'])
     PD_mm = moving_median(Inside, 3, input_settings['window_size'])
