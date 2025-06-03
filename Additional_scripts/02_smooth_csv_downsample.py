@@ -17,7 +17,7 @@ import numpy as np
 from pathlib import Path
 
 
-DS_factor=200
+DS_factor=100
 
 
 
@@ -57,7 +57,7 @@ def getRAW_folder():
         print('Please do not close the program!')
 
     #save the analysed data to a new created folder with a timestamp
-    analysis_folder = str(folder+'/Analysis_'+ timestamp)
+    analysis_folder = str(folder+'/Downsampled_by_'+ str(DS_factor) + '_'+ timestamp)
     os.mkdir(analysis_folder)
 
     #iterate through the h5 files in the folder
