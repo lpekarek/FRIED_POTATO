@@ -37,7 +37,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
             Distance = df.to_numpy()[:, 1] / 1000
         # accessing the data frequency from user input
         Frequency_value = input_settings['data_frequency']  
-        Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+        Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
 
     else:
         with h5py.File(Files[file_num], "r") as f:
@@ -53,7 +53,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
                 Distance = f.get("Distance/Piezo Distance")
                 # accessing the data frequency from the h5 file
                 Frequency_value = Force.attrs['Sample rate (Hz)']
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
 
             elif input_format['LF'] == 1:
                 if input_format['Trap'] == 1:
@@ -73,7 +73,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
                         load_distance = f.get("Distance/Distance 1")[:]
                     Distance = load_distance['Value'][:]
 
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force, Distance, input_settings, input_format)
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
 
                 # calculating the data frequency based on start- and end-time of the measurement
                 size_F_LF = len(Force)
@@ -81,7 +81,7 @@ def read_in_data(file_num, Files, input_settings, input_format):
                 timestamp_F_LF = load_force.attrs['Start time (ns)']
                 Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
 
-    return Force_Distance, Force_Distance_um, Frequency_value, filename_i
+    return Force_Distance, Force_Distance_um, Frequency_value, filename_i, Force_Distance_ds
 
 
 # open a folder containing raw data and lead through the analysis process
@@ -134,7 +134,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
             output_q.put('Hard work ahead!')
 
         # proceed differently with h5 and csv files
-        Force_Distance, Force_Distance_um, Frequency_value, filename = read_in_data(file_num, Files, input_settings, input_format)
+        Force_Distance, Force_Distance_um, Frequency_value, filename, Force_Distance_ds = read_in_data(file_num, Files, input_settings, input_format)
 
         num_curves = 1
 
@@ -355,7 +355,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                         float(common_steps[0]['step start']),
                                         float(common_steps[-1]['step end']),
                                         max(derivative_array[:, 1]),
-                                        Force_Distance,
+                                        Force_Distance_ds,
                                         derivative_array,
                                         F_low,
                                         0
@@ -368,7 +368,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             input_fitting,
                                             float(0),
                                             float(common_steps[0]['step start']),
-                                            Force_Distance,
+                                            Force_Distance_ds,
                                             1,
                                             1,
                                             derivative_array,
@@ -400,7 +400,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     export_data,
                                     input_fitting,
                                     float(common_steps[0]['step start']),
-                                    Force_Distance,
+                                    Force_Distance_ds,
                                     derivative_array,
                                     F_low,
                                     0
@@ -427,7 +427,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             input_fitting,
                                             float(common_steps[n]['step end']),
                                             float(common_steps[n + 1]['step start']),
-                                            Force_Distance,
+                                            Force_Distance_ds,
                                             1,
                                             1,
                                             derivative_array,
@@ -458,7 +458,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     input_fitting,
                                     float(common_steps[len(common_steps) - 1]['step end']),
                                     max(derivative_array[:, 1]),
-                                    Force_Distance,
+                                    Force_Distance_ds,
                                     1,
                                     1,
                                     derivative_array,
@@ -528,7 +528,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     export_data,
                                     input_fitting,
                                     derivative_array[-1, 1],
-                                    Force_Distance,
+                                    Force_Distance_ds,
                                     derivative_array,
                                     F_low,
                                     0
@@ -550,7 +550,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         #total_results_fit = total_results_fit.append(export_fit, ignore_index=True, sort=False)
                        
                         # create a plot for the fitted curve
-                        plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, analysis_folder, filename_i, timestamp)
+                        plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance_ds, analysis_folder, filename_i, timestamp)
                         
                     except Exception as e:
                         print(f"Error: {e}")

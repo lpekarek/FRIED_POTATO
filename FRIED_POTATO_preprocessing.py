@@ -47,15 +47,17 @@ def preprocess_RAW(Force, Distance, input_settings, input_format):
         filteredForce = signal.filtfilt(b, a, Force_ds)
         filteredDistance = signal.filtfilt(b, a, Distance_ds)
 
+        Force_Distance_ds =  np.column_stack((Force_ds, Distance_ds* 1000))
         Force_Distance = np.column_stack((filteredForce, filteredDistance * 1000))
         Force_Distance_um = np.column_stack((filteredForce, filteredDistance))
 
     else:
         Distance_nm=np.array(Distance)*1000
+        Force_Distance_ds =  np.column_stack((Force, Distance_nm))
         Force_Distance = np.column_stack((Force, Distance_nm))
         Force_Distance_um = np.column_stack((Force, Distance))
 
-    return Force_Distance, Force_Distance_um
+    return Force_Distance, Force_Distance_um, Force_Distance_ds
 
 
 # creates a dataset from min force threshold to max force value
