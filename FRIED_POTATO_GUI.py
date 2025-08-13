@@ -522,7 +522,7 @@ def open_folder():
     Files = glob.glob(folder_path)
 
     FD_number = 0
-    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = read_in_data(FD_number, Files, input_settings, input_format)
+    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data(FD_number, Files, input_settings, input_format)
     der_arr_TOMATO = create_derivative(input_settings, Frequency_value, Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
 
     entryText_filename.set(filename_TOMATO)
@@ -555,7 +555,7 @@ def change_FD(direction):
 
     delete_all_steps()
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
-    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO = read_in_data(FD_number, Files, input_settings, input_format)
+    Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO,Force_Distance_TOMATO_ds = read_in_data(FD_number, Files, input_settings, input_format)
 
     orientation = 'forward'
     if Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:  # reverse

@@ -37,8 +37,9 @@ def read_in_data(file_num, Files, input_settings, input_format):
             Distance = df.to_numpy()[:, 1] / 1000
         # accessing the data frequency from user input
         Frequency_value = input_settings['data_frequency']  
+        
         Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
-
+    
     else:
         with h5py.File(Files[file_num], "r") as f:
             directory_i = Path(Files[file_num])
@@ -141,19 +142,21 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         ###### Detect MultiFiles ######
         if input_format['MultiH5'] == 1:
             try:
-                fw_curves, rv_curves = split_H5(Force_Distance, input_settings, Frequency_value)
+                fw_curves, rv_curves, fw_curves_ds, rv_curves_ds = split_H5(Force_Distance, Force_Distance_ds, input_settings, Frequency_value)
                 print(fw_curves, rv_curves)
                 num_fw = len(fw_curves)
                 if len(rv_curves) == 0 or len(fw_curves) == 0:
                     raise  ValueError('No forward or no reverse curve found!')
                 #fw_curves.extend(rv_curves)
                 curves = np.append(fw_curves, rv_curves)
+                curves_ds = np.append(fw_curves_ds, rv_curves_ds)
             except:
                 print('No Multi-File detected!')
                 curves = [Force_Distance]
+                curves_ds = [Force_Distance_ds]
         else:
             curves = [Force_Distance]
-
+            curves_ds = [Force_Distance_ds]
         num_curves = len(curves)
 
         for x in range(num_curves):
@@ -199,6 +202,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
             print('################ FD', len(Force_Distance))
             Force_Distance_um = np.copy(Force_Distance)
             Force_Distance_um[:, 1] = Force_Distance_um[:, 1] / 1000
+            Force_Distance_ds = curves_ds[x][:, :2]
         ###### Detect MultiFiles end ######
 
             orientation = "forward"
@@ -550,7 +554,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         #total_results_fit = total_results_fit.append(export_fit, ignore_index=True, sort=False)
                        
                         # create a plot for the fitted curve
-                        plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance_ds, analysis_folder, filename_i, timestamp)
+                        plot_fit(fit, start_force_ss, start_distance_ss,Force_Distance, Force_Distance_ds, analysis_folder, filename_i, timestamp)
                         
                     except Exception as e:
                         print(f"Error: {e}")

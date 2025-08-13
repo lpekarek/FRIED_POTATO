@@ -38,7 +38,7 @@ def moving_median(input_data, column_number, window_size):
         mov_med.append(mm)
 
     for n in window_right:
-        mm_right = np.median(input_data[-window_half:, column_number])
+        mm_right = np.median(input_data[n-window_half:, column_number])
         mov_med.append(mm_right)
 
     return mov_med
