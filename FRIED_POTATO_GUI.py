@@ -403,9 +403,11 @@ def get_single_file(format):
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     import_file_path = tk.filedialog.askopenfilename()
     input_format['preprocess'] = 0
-    FD_raw, FD_raw_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
+    FD_raw, FD_raw_um, Frequency_value, filename, FD_ds = read_in_data(0, [import_file_path], input_settings, input_format)
+    #Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO, Force_Distance_TOMATO_ds
+
     input_format['preprocess'] = 1
-    FD, FD_um, Frequency_value, filename = read_in_data(0, [import_file_path], input_settings, input_format)
+    FD, FD_um, Frequency_value, filename, FD_ds = read_in_data(0, [import_file_path], input_settings, input_format)
     display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
 
 
