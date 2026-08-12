@@ -29,7 +29,7 @@ import json
 # relative imports
 from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data, show_h5_structure
 from FRIED_POTATO_preprocessing import create_derivative
-from FRIED_POTATO_config import default_values_HF, default_values_LF, default_values_CSV, default_values_FIT, default_values_constantF
+from FRIED_POTATO_config import default_values_HF,default_values_HF_noise, default_values_HF_SavGol, default_values_LF, default_values_CSV, default_values_FIT, default_values_constantF
 from FRIED_POTATO_constantF import get_constantF, display_constantF, fit_constantF
 from FRIED_POTATO_fitting import fitting_ds, fitting_ss
 from FRIED_POTATO_find_steps import calc_integral
@@ -122,6 +122,11 @@ def parameters(default_values, default_fit, default_constantF):
         Force_Min.set(default_values['Force threshold, pN'])
         Z_score_force.set(default_values['Z-score force'])
         Z_score_distance.set(default_values['Z-score distance'])
+        try: 
+
+            min_step_length.set(default_values['min_step_length'])
+        except:
+            pass
         augment_factor_value.set(2)
 
         step_d_variable.set(str(default_values['Step d']))
@@ -166,6 +171,8 @@ def parameters(default_values, default_fit, default_constantF):
     amplitude_gauss.delete(0, "end")
     amplitude_gauss.insert("end", str(default_constantF['Amplitude']))
 
+
+    
 def load_parameters():
     import_file_path = tk.filedialog.askopenfilename()  
     # Load the parameters from the text file
@@ -182,7 +189,6 @@ def load_parameters():
     try:
         input_format_start = lines.index("Input format:\n")
     except: 
-        #print('lines loading')
         input_format_start=False
         pass
 
@@ -203,6 +209,13 @@ def load_parameters():
         input_format_parameters_lines = lines[input_format_start + 1:]
         default_input_format = json.loads(''.join(input_format_parameters_lines).strip())
 
+    try:
+        check_box_min_step_length.set((default_input_format['Min_step_length']))
+        if int(default_input_format['Min_step_length']) == 1:
+            show_min_step_length()
+    except:
+        pass
+
     # Set the GUI variables based on the loaded parameters
     downsample_value.set(default_values['downsample_value'])
     Filter_degree.set(default_values['filter_degree'])
@@ -210,10 +223,15 @@ def load_parameters():
     Force_Min.set(default_values['F_min'])
     Z_score_force.set(default_values['z-score_f'])
     Z_score_distance.set(default_values['z-score_d'])
+    min_step_length.set(default_values['min_step_length'])
     try:
         augment_factor_value.set(int(default_values['augment_factor']))
     except:
-        #print('augmentation factor')
+        pass
+
+    try:
+        min_step_length_value.set(float(default_values['min_step_length']))
+    except:
         pass
 
     step_d_variable.set(str(default_values['step_d']))
@@ -240,6 +258,21 @@ def load_parameters():
     d_off_variable.set(str(default_fit['offset_d']))
     d_off_up_variable.set(str(default_fit['offset_d_up']))
     d_off_low_variable.set(str(default_fit['offset_d_low']))
+
+    # --- NEW: Load filter type (Savitzky-Golay toggle) ---
+    try:
+        filter_type = default_values.get('filter_type', 'butterworth')  # Default to butterworth
+        if filter_type == 'savgol':
+            check_box_SavGol.set(1)
+        else:
+            check_box_SavGol.set(0)
+        # Trigger label update after loading
+        show_savgol_labels()
+    except:
+        # If filter_type not in saved file, use default
+        check_box_SavGol.set(0)
+        show_savgol_labels()
+
     #print(input_format_start)
 
     if input_format_start!=False:
@@ -249,7 +282,11 @@ def load_parameters():
         try:
             check_box_augment.set(str(default_input_format['Augment']))
         except:
-            #print('augmentation')
+            pass
+
+        try:
+            check_box_min_step_length.set(str(default_input_format['Min step length']))
+        except:
             pass
 
         if str(default_input_format['Trap'])=='1':
@@ -270,7 +307,6 @@ def load_parameters():
         try:
             check_box_reverse_fitting.set(str(default_input_format['reverse_fitting']))
         except:
-            #print('reverse fitting')
             pass
 
 
@@ -282,6 +318,7 @@ def check_settings():
         'downsample_value': int(downsample_value2.get()),
         'filter_degree': int(Filter_degree2.get()),
         'filter_cut_off': float(Filter_cut_off2.get()),
+        'filter_type': 'savgol' if check_box_SavGol.get() == 1 else 'butterworth',
         'F_min': float(Force_Min2.get()),
         'step_d': int(step_d_value.get()),
         'z-score_f': float(Z_score_force2.get()),
@@ -289,6 +326,7 @@ def check_settings():
         'window_size': int(window_size_value.get()),
         'data_frequency': float(Frequency_value.get()),
         'STD_diff': float(STD_difference_value.get()),
+        'min_step_length':min_step_length_value.get(),
         'augment_factor': augment_factor_value.get()
     }
 
@@ -301,7 +339,8 @@ def check_settings():
         'length_measure': check_box_um.get(),
         'MultiH5': check_box_multiH5.get(),
         'preprocess': check_box_preprocess.get(),
-        'reverse_fitting':check_box_reverse_fitting.get()
+        'reverse_fitting':check_box_reverse_fitting.get(),
+        'Min_step_length':check_box_min_step_length.get()
     }
 
     export_data = {
@@ -309,7 +348,8 @@ def check_settings():
         'export_PLOT': check_box_plot.get(),
         'export_STEPS': check_box_steps.get(),
         'export_TOTAL': check_box_total_results.get(),
-        'export_FIT': check_box_fitting.get()
+        'export_FIT': check_box_fitting.get(),
+        'export_svg': check_box_export_svg.get()  # NEW LINE
     }
 
     input_fitting = {
@@ -560,10 +600,15 @@ def change_FD(direction):
     Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO,Force_Distance_TOMATO_ds = read_in_data(FD_number, Files, input_settings, input_format)
 
     orientation = 'forward'
-    if Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:  # reverse
+    # SAFE orientation check - prevent IndexError on empty arrays
+    if len(Force_Distance_TOMATO) < 2:
+        print(f"WARNING: Not enough data points ({len(Force_Distance_TOMATO)}) for orientation check in {filename_TOMATO}")
+    elif Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:  # reverse
         Force_Distance_TOMATO = np.flipud(Force_Distance_TOMATO)
         Force_Distance_um_TOMATO = np.flipud(Force_Distance_um_TOMATO)
         orientation = 'reverse'
+
+
 
     entryText_filename.set(filename_TOMATO)
 
@@ -829,8 +874,8 @@ def analyze_steps():
 
     if j > 1:
         for n in range(1, j):
-            print(start_distance_ss[n - 1][-1])
-            print(start_distance_ss[n][0])
+            #print(start_distance_ss[n - 1][-1])
+            #print(start_distance_ss[n][0])
             work_step_n, kT_n = calc_integral(
                 integral_ss_fit_end[n - 1],
                 integral_ss_fit_start[n],
@@ -839,7 +884,7 @@ def analyze_steps():
                 start_force_ss[n - 1][-1],
                 start_force_ss[n][0]
             )
-            print('WORK', work_step_n)
+            #print('WORK', work_step_n)
             tree_results.set('{}step{}'.format(timestamp, n+1), column='Work [pN*nm]', value=work_step_n)
             tree_results.set('{}step{}'.format(timestamp, n+1), column='Work [kT]', value=kT_n)
 
@@ -962,6 +1007,7 @@ def tab_bind(event=None):
 
 """ start the main process and Tkinter application """
 if __name__ == '__main__':
+    
     mp.freeze_support()
     root = tk.Tk()
     root.iconbitmap('FRIED_POTATO.ico')
@@ -1067,6 +1113,8 @@ if __name__ == '__main__':
     check_box_multiH5 = tk.IntVar()
     check_box_preprocess = tk.IntVar(value=1)
     check_box_reverse_fitting = tk.IntVar()
+    check_box_min_step_length = tk.IntVar()
+    check_box_SavGol = tk.IntVar()
 
     check_HF = tk.Checkbutton(
         check_box,
@@ -1136,6 +1184,21 @@ if __name__ == '__main__':
         variable=check_box_reverse_fitting
     ).grid(row=4, column=1, padx=8, sticky='W')
 
+
+    check_step_length = tk.Checkbutton(
+        check_box,
+        text="Min step length",
+        variable=check_box_min_step_length,
+        command=lambda: [select_box(check_box_HF, check_box_LF, check_box_CSV), parameters(default_values_HF_noise, default_values_FIT, default_values_constantF), show_min_step_length()]
+    ).grid(row=5, column=0, sticky='W')
+
+    check_SavGol = tk.Checkbutton(
+        check_box,
+        text="SavGol filt.",
+        variable=check_box_SavGol,
+        command=lambda: [show_savgol_labels(), parameters(default_values_HF_SavGol, default_values_FIT, default_values_constantF)]
+    ).grid(row=5, column=1, padx=8, sticky='W')
+    
     figure_frame = tk.Canvas(tab1, height=650, width=1000, borderwidth=1, relief='ridge')
     figure_frame.grid(row=1, column=0)
 
@@ -1148,20 +1211,29 @@ if __name__ == '__main__':
         parameter_frame,
         variable=check_box_preprocess
     ).grid(row=0, column=1, pady=(20, 2), sticky='W')
+
     Label_downsample = tk.Label(parameter_frame, text='Downsampling rate')
+
+
     Label_Filter1 = tk.Label(parameter_frame, text='Butterworth filter degree')
     Label_Filter2 = tk.Label(parameter_frame, text='Cut-off frequency')
+
+
     Label_ForceMin = tk.Label(parameter_frame, text='Force threshold, pN')
     Cluster_statistics = tk.Label(parameter_frame, text='STATISTICS', font='Helvetica 9 bold')
     Label_Zscore_F = tk.Label(parameter_frame, text='Z-score force')
     Label_Zscore_D = tk.Label(parameter_frame, text='Z-score distance')
-
+    
 
     Cluster_augment = tk.Label(parameter_frame, text='AUGMENTATION', font='Helvetica 9 bold')
     Label_augment_factor = tk.Label(parameter_frame, text='Augmentation factor')
     augment_factor_value = tk.StringVar()
     augment_factor_entry = tk.Entry(parameter_frame, textvariable=augment_factor_value)
 
+    Cluster_min_step_length = tk.Label(parameter_frame, text='Minimal step length', font='Helvetica 9 bold')
+    Label_min_step_length = tk.Label(parameter_frame, text='min contour length, nm')
+    min_step_length_value = tk.StringVar()
+    min_step_length_entry = tk.Entry(parameter_frame, textvariable=min_step_length_value)
 
     def show_augment():
         global Cluster_augment
@@ -1184,8 +1256,68 @@ if __name__ == '__main__':
             augment_factor_value = tk.StringVar()
             augment_factor_entry = tk.Entry(parameter_frame, textvariable=augment_factor_value)
 
+    def show_min_step_length():
+        global Cluster_min_step_length
+        global Label_min_step_length
+        global min_step_length_value
+        global min_step_length_entry
 
+        if check_box_min_step_length.get() == 1:
+            min_step_length_value.set(float(default_values_HF_noise['min_step_length']))
+            Cluster_min_step_length.grid(row=10, column=0, padx=2, pady=(20, 2))
+            Label_min_step_length.grid(row=11, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+            min_step_length_entry.grid(row=11, column=1, padx=2, pady=2)
 
+        elif check_box_min_step_length.get() == 0 and Cluster_min_step_length and Label_min_step_length and min_step_length_entry:
+            Cluster_min_step_length.destroy()
+            Label_min_step_length.destroy()
+            min_step_length_entry.destroy()
+            Cluster_min_step_length = tk.Label(parameter_frame, text='Minimal step length', font='Helvetica 9 bold')
+            Label_min_step_length = tk.Label(parameter_frame, text='min contour length, nm')
+            min_step_length_value = tk.StringVar()
+            min_step_length_entry = tk.Entry(parameter_frame, textvariable=min_step_length_value)
+
+    def show_savgol_labels():
+        """
+        Updates the filter label text based on whether Savitzky-Golay is selected.
+        Destroys old labels and creates new ones to avoid GUI conflicts.
+        """
+        global Label_Filter1, Label_Filter2
+        
+        # Globalize the entry widgets if you also want to change their hints/validation later
+        # For now, we only change the text labels.
+        
+        # 1. Destroy existing labels if they exist
+        try:
+            Label_Filter1.destroy()
+            Label_Filter2.destroy()
+        except Exception as e:
+            print(e)
+            pass # Ignore error if they haven't been created yet
+            
+        # 2. Determine new text based on checkbox
+        if check_box_SavGol.get() == 1:
+            text_1 = "SG Polynomial order"
+            text_2 = "SG Window length"
+            # Optional: You might want to warn the user that window length must be odd
+            # But for now, just updating the label
+        else:
+            text_1 = "Butterworth filt. deg."
+            text_2 = "Cut-off frequency"
+
+        # 3. Create new labels at the specific grid positions
+        # Based on your code structure: Row 2 for Filter 1, Row 3 for Filter 2
+        Label_Filter1 = tk.Label(parameter_frame, text=text_1)
+        Label_Filter1.grid(row=2, column=0, padx=2, pady=2)
+        
+        Label_Filter2 = tk.Label(parameter_frame, text=text_2)
+        Label_Filter2.grid(row=3, column=0, padx=2, pady=2)
+
+        # 4. Important: Re-bind the existing Entry widgets to these new labels visually?
+        # The Entry widgets (Filter_degree1, Filter_cut_off1) don't change ID, 
+        # so they stay in place. Only the text above them changes.
+
+    show_savgol_labels() 
     downsample_value = tk.StringVar()
     downsample_value1 = tk.Entry(parameter_frame, textvariable=downsample_value)
 
@@ -1203,6 +1335,9 @@ if __name__ == '__main__':
 
     Z_score_distance = tk.StringVar()
     Z_score_distance1 = tk.Entry(parameter_frame, textvariable=Z_score_distance)
+
+    min_step_length = tk.StringVar()
+    min_step_length1 = tk.Entry(parameter_frame, textvariable=min_step_length_value)   
 
     Cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
     Label_downsample.grid(row=1, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
@@ -1224,6 +1359,9 @@ if __name__ == '__main__':
     Label_Zscore_D.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
     Z_score_distance1.grid(row=7, column=1, padx=2, pady=2)
 
+
+    
+
     BUTTON1 = tk.Button(
         parameter_frame,
         text='Select Folder to Analyse!',
@@ -1235,7 +1373,7 @@ if __name__ == '__main__':
         width=20
     )
 
-    BUTTON1.grid(row=11, column=0, columnspan=2, pady=125)
+    BUTTON1.grid(row=12, column=0, columnspan=2, pady=125)
 
     """organize tab2"""
     figure_frame2 = tk.Canvas(tab2, height=650, width=650, borderwidth=1, relief='ridge')
@@ -1292,6 +1430,7 @@ if __name__ == '__main__':
     Label_Zscore_D = tk.Label(frame1, text='Z-score distance')
     Label_window_size = tk.Label(frame1, text='Moving median window size')
     Label_STD_difference = tk.Label(frame1, text='SD difference threshold')
+    Label_min_step_length = tk.Label(frame1, text='Min contour length, nm')
 
     # parameters that occur double (tab1 and tab4)
     downsample_value2 = tk.Entry(frame1, textvariable=downsample_value)
@@ -1300,6 +1439,7 @@ if __name__ == '__main__':
     Force_Min2 = tk.Entry(frame1, textvariable=Force_Min)
     Z_score_force2 = tk.Entry(frame1, textvariable=Z_score_force)
     Z_score_distance2 = tk.Entry(frame1, textvariable=Z_score_distance)
+    min_step_length2 = tk.Entry(frame1,textvariable=min_step_length)
 
     # parameters only in advanced settings
     step_d_variable = tk.StringVar()
@@ -1353,6 +1493,7 @@ if __name__ == '__main__':
     check_box_steps = tk.IntVar(value=1)
     check_box_total_results = tk.IntVar(value=1)
     check_box_fitting = tk.IntVar(value=1)
+    check_box_export_svg = tk.IntVar(value=0)  # Default to exporting SVGs
 
     Label_export = tk.Label(frame2, text="Select exported data", font='Helvetica 9 bold').grid(row=0, column=0, padx=20, pady=20)
 
@@ -1385,6 +1526,12 @@ if __name__ == '__main__':
         text="Fitting",
         variable=check_box_fitting,
     ).grid(row=5, column=0, sticky='W')
+
+    check_6 = tk.Checkbutton(
+    frame2,
+    text="Export plots as SVG too",
+    variable=check_box_export_svg,
+    ).grid(row=6, column=0, sticky='W')
 
     """ Fitting parameters """
     # Labels

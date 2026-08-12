@@ -17,7 +17,7 @@ import numpy as np
 from pathlib import Path
 
 
-DS_factor=100
+DS_factor=30
 
 
 

@@ -33,7 +33,7 @@ F_list=list(range(F_min, F_max, interval))
 # a list of values according to which the curves are shifted
 
 D_min=900
-D_max=2400
+D_max= 2000
 
 
 # 900 1300 for EMCV

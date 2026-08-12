@@ -42,10 +42,34 @@ def preprocess_RAW(Force, Distance, input_settings, input_format):
         Force_ds = Force[::input_settings['downsample_value']]
         Distance_ds = Distance[::input_settings['downsample_value']]
 
-        # Filter
-        b, a = signal.butter(input_settings['filter_degree'], input_settings['filter_cut_off'])
-        filteredForce = signal.filtfilt(b, a, Force_ds)
-        filteredDistance = signal.filtfilt(b, a, Distance_ds)
+        # Filter Logic
+        filter_type = input_settings.get('filter_type', 'butterworth')
+        
+        if filter_type == 'savgol':
+            # Savitzky-Golay
+            # SG_window_length corresponds to 'filter_cut_off' from GUI
+            # SG_polyorder corresponds to 'filter_degree' from GUI
+            SG_window_length = int(input_settings['filter_cut_off'])
+            SG_polyorder = int(input_settings['filter_degree'])
+            
+            # Validation: Window length must be odd
+            if SG_window_length % 2 == 0:
+                SG_window_length += 1
+            # Validation: Window length > polyorder
+            if SG_window_length <= SG_polyorder:
+                SG_window_length = SG_polyorder + 1
+                if SG_window_length % 2 == 0: SG_window_length += 1
+                
+            filteredForce = signal.savgol_filter(Force_ds, window_length=SG_window_length, polyorder=SG_polyorder)
+            filteredDistance = signal.savgol_filter(Distance_ds, window_length=SG_window_length, polyorder=SG_polyorder)
+        else:
+            # Butterworth (Default)
+            b, a = signal.butter(int(input_settings['filter_degree']), float(input_settings['filter_cut_off']))
+            filteredForce = signal.filtfilt(b, a, Force_ds)
+            filteredDistance = signal.filtfilt(b, a, Distance_ds)
+
+        
+
 
         Force_Distance_ds =  np.column_stack((Force_ds, Distance_ds* 1000))
         Force_Distance = np.column_stack((filteredForce, filteredDistance * 1000))
@@ -66,15 +90,20 @@ def trim_data(FD_data, F_min):
     PD_trimmed = np.array([])
     F_low = np.array([])
 
-    F_max = np.where(FD_data[:, 0] == max(FD_data[:, 0]))
-    fi = F_max[0][0]
+    last_idx = len(FD_data)-1
+    while FD_data[last_idx, 0] < F_min and last_idx > 0:
+        last_idx = last_idx - 1
 
+    #F_max = np.where(FD_data[:, 0] == max(FD_data[:, 0])) #old way of trimming - ignoring whatever is "behind" maximum force
+    #fi = F_max[0][0]
+
+    fi = last_idx
     while FD_data[fi, 0] > F_min and fi > 0:
         fi = fi - 1
 
-    if not fi == F_max[0][0]:
-        F_trimmed = FD_data[fi:F_max[0][0], 0]
-        PD_trimmed = FD_data[fi:F_max[0][0], 1]
+    if not fi == last_idx:
+        F_trimmed = FD_data[fi:last_idx, 0]
+        PD_trimmed = FD_data[fi:last_idx, 1]
         F_low = FD_data[:fi, 0]
     elif fi == 0:
         print('Could not trim this curve, data below minimum force threshold!')

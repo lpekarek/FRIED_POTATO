@@ -16,6 +16,34 @@ default_values_HF = {
     'Data frequency, Hz': '1000'
 }
 
+
+default_values_HF_noise = {
+    'Downsampling rate': '10',
+    'Butterworth filter degree': '1',
+    'Cut-off frequency': '0.01',
+    'Force threshold, pN': '3',
+    'Z-score force': '1.5',
+    'Z-score distance': '1.5',
+    'min_step_length': '6',
+    'Step d': '10',
+    'Moving median window size': '800',
+    'STD difference threshold': '0.05',
+    'Data frequency, Hz': '1000'
+}
+
+default_values_HF_SavGol = {
+    'Downsampling rate': '10',
+    'Butterworth filter degree': '2',
+    'Cut-off frequency': '200',
+    'Force threshold, pN': '5',
+    'Z-score force': '3',
+    'Z-score distance': '3',
+    'Step d': '10',
+    'Moving median window size': '800',
+    'STD difference threshold': '0.05',
+    'Data frequency, Hz': '1000'
+}
+
 default_values_LF = {
     'Downsampling rate': '1',
     'Butterworth filter degree': '2',
@@ -23,6 +51,7 @@ default_values_LF = {
     'Force threshold, pN': '5',
     'Z-score force': '3',
     'Z-score distance': '3',
+    'min_step_length': '2',
     'Step d': '3',
     'Moving median window size': '20',
     'STD difference threshold': '0.05',
@@ -36,6 +65,7 @@ default_values_CSV = {
     'Force threshold, pN': '5',
     'Z-score force': '2.5',
     'Z-score distance': '3',
+    'min_step_length': '2',
     'Step d': '10',
     'Moving median window size': '120',
     'STD difference threshold': '0.05',
@@ -49,7 +79,7 @@ default_values_FIT = {
     'Persistance-Length ss, nm': '1',
     'Contour-Length ds, nm': '1260',
     'Contour-Length ss, nm': '1',
-    'Contour-Length ss, upper bound, nm': '1267',
+    'Contour-Length ss, upper bound, nm': '1300',
     'Stiffness ds, pN': '800',
     'Stiffness ds, upper bound, pN': '850',
     'Stiffness ds, lower bound, pN': '750',
@@ -57,11 +87,11 @@ default_values_FIT = {
     'Stiffness ss, upper bound, pN': '1100',
     'Stiffness ss, lower bound, pN': '900',
     'Force offset, pN': '0',
-    'Force offset, upper bound, pN': '2',
-    'Force offset, lower bound, pN': '-2',
+    'Force offset, upper bound, pN': '0.5',
+    'Force offset, lower bound, pN': '-0.5',
     'Distance offset, nm': '0',
-    'Distance offset, upper bound, nm': '500',
-    'Distance offset, lower bound, nm': '-500'
+    'Distance offset, upper bound, nm': '800',
+    'Distance offset, lower bound, nm': '-800'
 }
 
 default_values_constantF = {

@@ -7,11 +7,12 @@ import numpy as np
 from pathlib import Path
 import lumicks.pylake as lk
 import traceback
+import gc
 
 # relative imports
 from FRIED_POTATO_fitting import fitting_ds, fitting_ss, plot_fit, fitting_FU, fitting_FU_ss
 from FRIED_POTATO_preprocessing import preprocess_RAW, trim_data, create_derivative
-from FRIED_POTATO_find_steps import find_steps_F, find_steps_PD, find_common_steps, calc_integral, save_figure
+from FRIED_POTATO_find_steps import find_steps_F,find_steps_F_old, find_steps_PD, find_steps_PD_old, find_common_steps, calc_integral, save_figure
 from FRIED_POTATO_processMultiH5 import split_H5
 
 
@@ -56,6 +57,17 @@ def read_in_data(file_num, Files, input_settings, input_format):
                 Frequency_value = Force.attrs['Sample rate (Hz)']
                 Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
 
+
+            elif input_format['Min step length'] == 1:
+                if input_format['Trap'] == 1:
+                    Force = f.get("Force HF/Force 1x")
+                elif input_format['Trap'] == 0:
+                    Force = f.get("Force HF/Force 2x")
+                Distance = f.get("Distance/Piezo Distance")
+                # accessing the data frequency from the h5 file
+                Frequency_value = Force.attrs['Sample rate (Hz)']
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
+
             elif input_format['LF'] == 1:
                 if input_format['Trap'] == 1:
                     load_force = f.get("Force LF/Force 1x")
@@ -82,7 +94,36 @@ def read_in_data(file_num, Files, input_settings, input_format):
                 timestamp_F_LF = load_force.attrs['Start time (ns)']
                 Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
 
-    return Force_Distance, Force_Distance_um, Frequency_value, filename_i, Force_Distance_ds
+            # VALIDATION: Ensure data arrays are not empty before returning
+            if len(Force) == 0 or len(Distance) == 0:
+                raise ValueError(f"No data found in {Files[file_num]}")
+
+            # --- NEW: Check for Trap Position data ---
+            use_trap_pos = False
+            trap_pos_fd = None
+            trap_pos_fd_ds = None
+
+            if input_format['HF'] == 1 or input_format['Min step length'] == 1:
+                try:
+                    trap_path = "Trap position/1X"
+                    if trap_path in f:
+                        trap_raw = f.get(trap_path)
+                        use_trap_pos = True
+
+                        # Pass trap position through the SAME preprocessing pipeline as Distance
+                        # This guarantees identical length, downsampling, and filtering
+                        trap_pos_fd, _, trap_pos_fd_ds = preprocess_RAW(
+                            Force, trap_raw, input_settings, input_format
+                        )
+
+                        print(f"Trap Position detected. Will use for curve splitting.")
+                        print(f"  Force_Distance length: {len(Force_Distance)}, Trap FD length: {len(trap_pos_fd)}")
+                    else:
+                        print("No Trap Position data found. Using Distance for splitting.")
+                except Exception as e:
+                    print(f"Warning: Could not load Trap Position: {e}")
+
+    return Force_Distance, Force_Distance_um, Frequency_value, filename_i, Force_Distance_ds, use_trap_pos, trap_pos_fd, trap_pos_fd_ds
 
 
 # open a folder containing raw data and lead through the analysis process
@@ -104,25 +145,29 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 'step start',
                 'step end',
                 'step length',
-                'filename',
-                'model',
-                'model_ss',
+                # Fitting parameters - ds region
+                'model_type',
                 'log_likelihood',
-                'Lc_ds',
-                'Lp_ds',
-                'Lp_ds_stderr',
-                'St_ds',
-                'Lc_ss',
-                'Lc_ss_stderr',
-                'Lp_ss',
-                'St_ss',
-                'f_offset',
-                'd_offset',
+                'Lc_ds', 'Lc_ds_stderr',
+                'Lp_ds', 'Lp_ds_stderr',
+                'St_ds', 'St_ds_stderr',
+                'f_offset_ds', 'f_offset_ds_stderr',
+                'd_offset_ds', 'd_offset_ds_stderr',
+                # Fitting parameters - ss region
+                'Lc_ss', 'Lc_ss_stderr',
+                'Lp_ss', 'Lp_ss_stderr',
+                'St_ss', 'St_ss_stderr',
+                'f_offset_ss', 'f_offset_ss_stderr',
+                'd_offset_ss', 'd_offset_ss_stderr',
+                # Work calculations
                 'Work_(pN*nm)',
-                'Work_(kB*T)', 
+                'Work_(kB*T)',
+                # Additional computed fields
                 "delta Lc",
                 "total Lc",
-                "total W"
+                "total W",
+                "total number of steps",
+                'fit_status'
             )
             f.write(','.join(head))
             f.write('\n')
@@ -135,29 +180,72 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
             output_q.put('Hard work ahead!')
 
         # proceed differently with h5 and csv files
-        Force_Distance, Force_Distance_um, Frequency_value, filename, Force_Distance_ds = read_in_data(file_num, Files, input_settings, input_format)
+        Force_Distance, Force_Distance_um, Frequency_value, filename, Force_Distance_ds,  use_trap_pos, trap_pos_fd, trap_pos_fd_ds = read_in_data(file_num, Files, input_settings, input_format)
+
+
+        # VALIDATION: Check if data was loaded successfully
+        if len(Force_Distance) == 0:
+            print(f"WARNING: File {filename} returned empty Force_Distance array! Skipping...")
+            output_q.put(f'Error: File {filename} contains no valid data - skipped')
+            file_num = file_num + 1
+            continue
+
 
         num_curves = 1
 
         ###### Detect MultiFiles ######
         if input_format['MultiH5'] == 1:
             try:
-                fw_curves, rv_curves, fw_curves_ds, rv_curves_ds = split_H5(Force_Distance, Force_Distance_ds, input_settings, Frequency_value)
-                print(fw_curves, rv_curves)
-                num_fw = len(fw_curves)
-                if len(rv_curves) == 0 or len(fw_curves) == 0:
-                    raise  ValueError('No forward or no reverse curve found!')
-                #fw_curves.extend(rv_curves)
-                curves = np.append(fw_curves, rv_curves)
-                curves_ds = np.append(fw_curves_ds, rv_curves_ds)
-            except:
-                print('No Multi-File detected!')
+                fw_curves, rv_curves, fw_curves_ds, rv_curves_ds = split_H5(
+                                                                        Force_Distance, 
+                                                                        Force_Distance_ds, 
+                                                                        input_settings, 
+                                                                        Frequency_value,
+                                                                        use_trap_pos=use_trap_pos,           # New parameter
+                                                                        trap_data=trap_pos_fd,               # New parameter (create this array)
+                                                                        trap_ds_data=trap_pos_fd_ds          # New parameter (create this array)
+                                                                    )
+                                
+                # Convert the returned object-arrays to Python lists of numpy arrays
+                # Explicitly ensure each element is a numpy array
+                fw_list = [np.asarray(item) for item in fw_curves] if hasattr(fw_curves, '__iter__') else [np.asarray(fw_curves)]
+                rv_list = [np.asarray(item) for item in rv_curves] if hasattr(rv_curves, '__iter__') else [np.asarray(rv_curves)]
+                fw_ds_list = [np.asarray(item) for item in fw_curves_ds] if hasattr(fw_curves_ds, '__iter__') else [np.asarray(fw_curves_ds)]
+                rv_ds_list = [np.asarray(item) for item in rv_curves_ds] if hasattr(rv_curves_ds, '__iter__') else [np.asarray(rv_curves_ds)]
+
+                num_fw = len(fw_list)
+                num_rv = len(rv_list)
+
+                if len(rv_list) == 0 or len(fw_list) == 0:
+                    raise ValueError('No forward or no reverse curve found!')
+
+                # Concatenate the lists
+                curves = fw_list + rv_list
+                curves_ds = fw_ds_list + rv_ds_list
+                
+                num_curves = len(curves)
+                print(f"Success: Detected {num_curves} curves.")
+                # Debug: check the type of the first element
+                if num_curves > 0:
+                    print(f"Type of curves[0]: {type(curves[0])}")
+                    print(f"Shape of curves[0]: {curves[0].shape}")
+                    print(f"Is curves[0] a list? {isinstance(curves[0], list)}")
+
+            except Exception as e: 
+                print(f"Error in MultiH5 processing: {e}")
+                print('No Multi-File detected! Falling back to single curve.')
                 curves = [Force_Distance]
                 curves_ds = [Force_Distance_ds]
+                num_curves = 1
         else:
             curves = [Force_Distance]
             curves_ds = [Force_Distance_ds]
-        num_curves = len(curves)
+            num_curves = 1
+        print("number of curves is:")
+        print(num_curves)
+        print("type of curves")
+        print(type(curves))
+        
 
         for x in range(num_curves):
             # empty dataframe to store all step results of all curves in the folder
@@ -165,25 +253,29 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
             # create dataframe to store all fitting parameters of all curves in the folder
             header_fit = [
-                "filename",
-                "model",
-                'model_ss',
+                #"filename",
+                "model_type",
                 "log_likelihood",
-                "Lc_ds",
-                "Lp_ds",
-                "Lp_ds_stderr",
-                "St_ds",
-                "Lc_ss",
-                "Lc_ss_stderr",
-                "Lp_ss",
-                "St_ss",
-                "f_offset",
-                "d_offset",
-                "Work_(pN*nm)",
-                "Work_(kB*T)",
-                "delta Lc",
-                "total Lc",
-                "total W"
+                # ds_region parameters
+                'Lc_ds', 'Lc_ds_stderr',
+                'Lp_ds', 'Lp_ds_stderr',
+                'St_ds', 'St_ds_stderr',
+                'f_offset_ds', 'f_offset_ds_stderr',
+                'd_offset_ds', 'd_offset_ds_stderr',
+                # ss_region parameters
+                'Lc_ss', 'Lc_ss_stderr',
+                'Lp_ss', 'Lp_ss_stderr',
+                'St_ss', 'St_ss_stderr',
+                'f_offset_ss', 'f_offset_ss_stderr',
+                'd_offset_ss', 'd_offset_ss_stderr',
+                # Work
+                'Work_(pN*nm)',
+                'Work_(kB*T)',
+                'delta Lc',
+                'total Lc',
+                'total W',
+                "total number of steps",
+                'fit_status'
             ]
 
             total_results_fit = pd.DataFrame(columns=header_fit)
@@ -206,36 +298,86 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         ###### Detect MultiFiles end ######
 
             orientation = "forward"
-            if Force_Distance[0, 1] > Force_Distance[-1, 1]:  # reverse
+            # SAFE orientation check - prevent IndexError on empty arrays
+            if len(Force_Distance) < 2:
+                print(f"WARNING: Not enough data points ({len(Force_Distance)}) for orientation check in {filename_i}")
+                output_q.put(f'Warning: Insufficient data points in {filename_i}')
+            elif Force_Distance[0, 1] > Force_Distance[-1, 1]:  # reverse
                 orientation = "reverse"
                 Force_Distance = np.flipud(Force_Distance)
+                Force_Distance_ds = np.flipud(Force_Distance_ds)
                 Force_Distance_um = np.flipud(Force_Distance_um)
 
             # Export down sampled and smoothened FD values
             if export_data['export_SMOOTH'] == 1:
                 save_to = analysis_folder + "/" + filename_i + "_smooth_" + timestamp + ".csv"
-                np.savetxt(save_to, Force_Distance_um, delimiter=",")
+                with open(save_to, "w") as f:
+                    np.savetxt(f, Force_Distance_um, delimiter=",")
+                #np.savetxt(save_to, Force_Distance_um, delimiter=",")
             else:
                 pass
 
             # trim data below specified force thresholds
             F_trimmed, PD_trimmed, F_low = trim_data(Force_Distance, input_settings['F_min'])
+            common_steps = []
             print('#################### Trimmmed', len(F_trimmed))
-            if not F_trimmed.size == 0:
+            if not F_trimmed.size == 0 and not F_trimmed.size == 1:
                 # create force and distance derivative of the pre-processed data to be able to identify steps
                 derivative_array = create_derivative(input_settings, Frequency_value, F_trimmed, PD_trimmed, F_low)
                 print('################### der array', len(derivative_array))
+
+                # --- VALIDATION: skip curve if derivative array is invalid ---
+                skip_curve = False
+                if len(derivative_array) < 2:
+                    print(f"WARNING: derivative_array too short ({len(derivative_array)}) for {filename_i}. Skipping curve.")
+                    output_q.put(f'Warning: Skipped {filename_i} - insufficient data for derivative')
+                    skip_curve = True
+                elif len(derivative_array.shape) < 2:
+                    print(f"WARNING: derivative_array is 1D for {filename_i}. Skipping curve.")
+                    output_q.put(f'Warning: Skipped {filename_i} - invalid derivative array shape')
+                    skip_curve = True
+
+                if skip_curve:
+                    # Write a dummy row to total_results so CSV export doesn't break
+                    results_total_total = pd.concat([
+                        pd.DataFrame({'filename': filename_i}, index=[0]),
+                        pd.DataFrame(columns=header_fit)
+                    ], axis=1)
+                    if export_data['export_TOTAL'] == 1:
+                        results_total_total.to_csv(filename_total_results, mode='a', index=False, header=False)
+                    output_q.put(f'Done: Skipped {filename_i}')
+                    continue
+                # --- END VALIDATION ---
+
                 """find steps based on force derivative"""
                 filename_results = analysis_folder + "/" + filename_i + "_results_" + timestamp + ".csv"
 
-                # try:
-                results_F, PD_start_F = find_steps_F(
-                    input_settings,
-                    filename_i,
-                    Force_Distance,
-                    derivative_array,
-                    orientation
-                )
+                if input_format['Min_step_length'] == 1:
+                    try:
+                        results_F, PD_start_F = find_steps_F(
+                            input_settings,
+                            filename_i,
+                            Force_Distance,
+                            derivative_array,
+                            orientation
+                        )
+                    except Exception as e:
+                        print(f"Error in find_steps_F for {filename_i}: {e}")
+                        traceback.print_exc()
+                        results_F, PD_start_F = [], []
+                else:
+                    try:
+                        results_F, PD_start_F = find_steps_F_old(
+                            input_settings,
+                            filename_i,
+                            Force_Distance,
+                            derivative_array,
+                            orientation
+                        )
+                    except Exception as e:
+                        print(f"Error in find_steps_F_old for {filename_i}: {e}")
+                        traceback.print_exc()
+                        results_F, PD_start_F = [], []
 
                 results_F_list = list(results_F)
 
@@ -255,54 +397,95 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
                 """find steps based on distance derivative"""
 
-                try:
-                    results_PD, PD_start_PD = find_steps_PD(
-                        input_settings,
-                        filename_i,
-                        Force_Distance,
-                        derivative_array,
-                        orientation
-                    )
+                if input_format['Min_step_length'] == 1:
 
-                    results_PD_list = list(results_PD)
+                    try:
+                        results_PD, PD_start_PD = find_steps_PD(
+                            input_settings,
+                            filename_i,
+                            Force_Distance,
+                            derivative_array,
+                            orientation
+                        )
 
-                    if export_data['export_STEPS'] == 1:
-                        steps_results_PD = pd.DataFrame(results_PD_list)
-                        #with open(filename_results, 'a+') as f:
-                            #f.write('\nSteps found by distance derivative:\n')
-                        steps_results_PD.to_csv(filename_results, mode='a', index=False, header=True)
+                        results_PD_list = list(results_PD)
 
-                except:
-                    results_PD = []
-                    PD_start_PD = []
-                    err_PD = str("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding Distance steps')
-                    print(err_PD)
-                    pass
+                        if export_data['export_STEPS'] == 1 and len(results_PD_list) > 0:
+                            steps_results_PD = pd.DataFrame(results_PD_list)
+                            steps_results_PD.to_csv(filename_results, mode='a', index=False, header=True)
+
+                    except Exception as e:
+                        results_PD = []
+                        PD_start_PD = []
+                        err_PD = str("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding Distance steps')
+                        print(err_PD)
+                        print(f"Detailed error: {e}")
+                        traceback.print_exc()
+
+                else:
+                    try:
+                        results_PD, PD_start_PD = find_steps_PD_old(
+                            input_settings,
+                            filename_i,
+                            Force_Distance,
+                            derivative_array,
+                            orientation
+                        )
+
+                        results_PD_list = list(results_PD)
+
+                        if export_data['export_STEPS'] == 1 and len(results_PD_list) > 0:
+                            steps_results_PD = pd.DataFrame(results_PD_list)
+                            steps_results_PD.to_csv(filename_results, mode='a', index=False, header=True)
+
+                    except Exception as e:
+                        results_PD = []
+                        PD_start_PD = []
+                        err_PD = str("Error in finding steps for file " + str(filename_i) + '\n' 'There was an error in finding Distance steps')
+                        print(err_PD)
+                        print(f"Detailed error: {e}")
+                        traceback.print_exc()
 
                 # save plot with FD-curve, derivatives and found steps
-                save_figure(
-                    export_data['export_PLOT'],
-                    timestamp,
-                    filename_i,
-                    analysis_folder,
-                    Force_Distance,
-                    derivative_array,
-                    F_trimmed,
-                    PD_trimmed,
-                    PD_start_F,
-                    PD_start_PD
-                )
+                # save plot with FD-curve, derivatives and found steps
+                try:
+                    save_figure(
+                        export_data['export_PLOT'],
+                        export_data, 
+                        timestamp,
+                        filename_i,
+                        analysis_folder,
+                        Force_Distance,
+                        derivative_array,
+                        F_trimmed,
+                        PD_trimmed,
+                        PD_start_F if isinstance(PD_start_F, list) else [],
+                        PD_start_PD if isinstance(PD_start_PD, list) else []
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not save figure for {filename_i}: {e}")
+                    traceback.print_exc()
+                    pass
+
+
 
                 # when steps are found by force AND distance derivative, they are considered common steps
+                #common_steps = []
                 common_steps = []
                 try:
-                    common_steps = find_common_steps(results_F_list, results_PD_list)
-                    # to match with the fitting rows (always one more than steps) put a 'step 0' as first line
+                    if len(results_F_list) > 0 and len(results_PD_list) > 0:
+                        common_steps = find_common_steps(results_F_list, results_PD_list)
+                    else:
+                        print(f"No steps found for {filename_i} (F: {len(results_F_list)}, PD: {len(results_PD_list)})")
+
+                    print("common steps are:")
+                    print(common_steps)
+
                     common_steps_results = [{'filename': filename_i, 'orientation': orientation, 'Derivative of': '', 'step #': 0, 'F1': '', 'F2': '', 'Fc': '', 'step start': '', 'step end': '', 'step length': ''}]
-                except:
-                    err_FCS = str("Error in finding common steps" + str(filename_i) + '\n' 'There was an error in finding common steps')
+                except Exception as e:
+                    err_FCS = str("Error in finding common steps for " + str(filename_i) + ': ' + str(e))
                     output_q.put(err_FCS)
-                    pass
+                    traceback.print_exc()
 
                 # append common steps to the 'step 0'
                 if common_steps:
@@ -351,7 +534,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     ###### Reverse fitting ######
                             if input_format['reverse_fitting'] == 1:
                                 try:
-                                    export_fit_ds_FU, area_ds, step_start = fitting_FU(
+                                    export_fit_ds_FU, area_ds, step_start, model_FU_obj = fitting_FU(
                                         filename_i,
                                         input_settings,
                                         export_data,
@@ -398,7 +581,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                             else:
 
                                 # fit part between start of the FD-cure up to the first common step
-                                export_fit_ds, area_ds, step_start = fitting_ds(
+                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(
                                     filename_i,
                                     input_settings,
                                     export_data,
@@ -438,7 +621,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             F_low,
                                             0
                                         )
-                                        print(str(n))
+                                        #print(str(n))
                                         fit.append(fit_ss)
                                         start_force_ss.append(f_fitting_region_ss)
                                         start_distance_ss.append(d_fitting_region_ss)
@@ -498,7 +681,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                     common_steps[0]['F2']
                                 )
 
-                                print("Work of first step: " + str(work_first_step))
+                                #print("Work of first step: " + str(work_first_step))
                                 work_per_step.append(work_first_step)
                                 kT_per_step.append(kT_1)
 
@@ -526,7 +709,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         # So in this case the fit will be performed for the whole curve from beginning to end.
                         except IndexError:
                             if not common_steps:
-                                export_fit_ds, area_ds, step_start = fitting_ds(
+                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(
                                     filename_i,
                                     input_settings,
                                     export_data,
@@ -547,6 +730,18 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         else:
                             export_fit_df = export_fit
 
+                        # Convert any remaining complex objects to strings or NaN
+                        for col in export_fit_df.columns:
+                            if export_fit_df[col].dtype == object:
+                                # Check if column contains non-numeric objects
+                                try:
+                                    pd.to_numeric(export_fit_df[col], errors='raise')
+                                except:
+                                    # Replace non-serializable objects with NaN or descriptive strings
+                                    export_fit_df[col] = export_fit_df[col].apply(
+                                        lambda x: np.nan if hasattr(x, '__dict__') or callable(x) else str(x)
+                                    )
+
                         # Use pd.concat to append the data
                         total_results_fit = pd.concat([total_results_fit, export_fit_df], ignore_index=True, sort=False)
 
@@ -554,8 +749,21 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         #total_results_fit = total_results_fit.append(export_fit, ignore_index=True, sort=False)
                        
                         # create a plot for the fitted curve
-                        plot_fit(fit, start_force_ss, start_distance_ss,Force_Distance, Force_Distance_ds, analysis_folder, filename_i, timestamp)
-                        
+                        try:
+                            plot_fit(fit, 
+                                    start_force_ss, 
+                                    start_distance_ss,
+                                    Force_Distance, 
+                                    Force_Distance_ds, 
+                                    analysis_folder, 
+                                    filename_i, 
+                                    timestamp,
+                                    export_data=export_data, 
+                                    model_FU=model_FU_obj if 'model_FU_obj' in locals() else None,
+                                    model_ds_final=main_ds_model if 'main_ds_model' in locals() else None
+                                    )
+                        except: 
+                            pass
                     except Exception as e:
                         print(f"Error: {e}")
                         traceback.print_exc()
@@ -573,30 +781,42 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
                 # Remove the last three columns
                 #total_results_fit = total_results_fit.iloc[:, :-3]
-            if common_steps:
-                # Calculate delta LC
-                total_results_fit['delta Lc'] = total_results_fit['Lc_ss'].diff().fillna("#N/A")
 
-                # Initialize total Lc and total W columns with #N/A
-                total_results_fit['total Lc'] = "#N/A"
-                total_results_fit['total W'] = "#N/A"
+            
+            
+                """start of tab shift"""
+            if not common_steps:
+                print("no common steps found")
+                common_steps = []
+            if len(common_steps)>0 and len(F_trimmed) >0:
+                #print(common_steps)
 
-                # Set total Lc for the last row
-                total_results_fit.loc[total_results_fit.index[-1], 'total Lc'] = total_results_fit['Lc_ss'].iloc[-1]
+                if len(total_results_fit) > 0:
+                    # Calculate delta LC
+                    total_results_fit['delta Lc'] = total_results_fit['Lc_ss'].diff().fillna("#N/A")
 
-                # Set total W for the last row
-                total_results_fit.loc[total_results_fit.index[-1], 'total W'] = total_results_fit['Work_(kB*T)'].sum()
+                    # Initialize total Lc and total W columns with #N/A
+                    total_results_fit['total Lc'] = "#N/A"
+                    total_results_fit['total W'] = "#N/A"
+                    total_results_fit['total number of steps'] = "#N/A"
 
-                # Find the index of the "Work_(kB*T)" column
-                insert_pos = total_results_fit.columns.get_loc('Work_(kB*T)') + 1
+                    # Set total Lc for the last row
+                    try:
+                        total_results_fit.loc[total_results_fit.index[-1], 'total Lc'] = total_results_fit['Lc_ss'].iloc[-1]
+                    except (IndexError, KeyError):
+                        pass
 
-                # Insert the new columns after "Work_(kB*T)"
-                #total_results_fit = pd.concat([total_results_fit.iloc[:, :insert_pos], total_results_fit[['delta Lc', 'total Lc', 'total W']], total_results_fit.iloc[:, insert_pos:]], axis=1)
+                    # Set total W for the last row
+                    try:
+                        total_results_fit.loc[total_results_fit.index[-1], 'total W'] = total_results_fit['Work_(kB*T)'].sum()
+                    except (IndexError, KeyError):
+                        pass
 
-
-                #print("total results fits are:")
-                #print(total_results_fit)
-
+                    # Set total Lc for the last row
+                    try:
+                        total_results_fit.loc[total_results_fit.index[-1], 'total number of steps'] = total_results_steps['step #'].iloc[-1]
+                    except (IndexError, KeyError):
+                        pass
 
 
                 results_total_total = pd.concat([total_results_steps, total_results_fit], axis=1)
@@ -614,7 +834,11 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
                 print('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
                 output_q.put('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
-               
+            
+                """end of tab shift"""
+
+
+
 
         if file_num == int(len(Files) / 2):
             print('\nHalf way there!\n')
@@ -628,6 +852,26 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         print('done', file_num, 'from', len(Files))
         out_progress = str('Done ' + str(file_num) + ' files from ' + str(len(Files)))
         output_q.put(out_progress)
+
+            # --- MEMORY CLEANUP START ---
+        # Explicitly delete large local variables
+        del Force_Distance
+        del Force_Distance_um
+        del Force_Distance_ds
+        del derivative_array
+        del F_trimmed
+        del PD_trimmed
+        del common_steps
+        del results_F_list
+        del results_PD_list
+        del export_fit
+        del fit
+        del start_force_ss
+        del start_distance_ss
+        
+        # Force garbage collection to reclaim memory immediately
+        gc.collect()
+        # --- MEMORY CLEANUP END ---
 
         print(filename_i)
         output_q.put(filename_i)

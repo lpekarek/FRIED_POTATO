@@ -27,7 +27,7 @@ def openFile():
     global folder_path_r
     # Specify the folder path containing CSV files
     folder_path_f = filedialog.askdirectory()
-    folder_path_r = filedialog.askdirectory()
+    #folder_path_r = filedialog.askdirectory()
     root.destroy()
 
 openFile()
@@ -37,7 +37,7 @@ df_list_f = []
 df_list_r = []
 # Get a list of files in the folder
 file_list_f = os.listdir(folder_path_f)
-file_list_r = os.listdir(folder_path_r)
+#file_list_r = os.listdir(folder_path_r)
 
 # Loop through each file in the folder
 for file_name in file_list_f:
@@ -53,21 +53,11 @@ for file_name in file_list_f:
         df_list_f.append(df)
 
 # Loop through each file in the folder
-for file_name in file_list_r:
-    if file_name.endswith(".csv"):  # Check if file is a CSV file
-        # Load the CSV file into a dataframe
-        file_path = os.path.join(folder_path_r, file_name)
-        df = pd.read_csv(file_path)
-        
-        # Add file name as a column
-        df['File'] = os.path.splitext(file_name)[0]
-        
-        # Append to df_list
-        df_list_r.append(df)
+
 
 # Concatenate all dataframes in df_list into a single dataframe
 combined_df_f = pd.concat(df_list_f, ignore_index=True)
-combined_df_r = pd.concat(df_list_r, ignore_index=True)
+#combined_df_r = pd.concat(df_list_r, ignore_index=True)
 # Plot using plotly
 fig = go.Figure()
 
@@ -86,15 +76,6 @@ for file_name, group in combined_df_f.groupby("File"):
 
 color_index = 0
 
-for file_name, group in combined_df_r.groupby("File"):
-    fig.add_trace(go.Scatter(x=group["Distance [nm]"], 
-                             y=group["Force [pN]"], 
-                             mode='lines', 
-                             name=file_name, 
-                             hoverinfo="name", 
-                             showlegend=True,
-                             line=dict(color=color_scheme_base[color_index])))
-    color_index = (color_index + 1) % len(color_scheme_colors)  # Move to the next color in the list
 
 
 

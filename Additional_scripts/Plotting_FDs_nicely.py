@@ -22,15 +22,21 @@ def openFile():
 openFile()
 
 # Define the specific hex color codes for each folder
-color_hex1 = '#CC0078'  # Pink color for the first folder #RBP #3883CB #RNA #CC0078
-color_hex2 = '#667C85'  # Blue color for the second folder #grey reverse #667C85 ! #YBX1 #778f3e
+color_hex1 = '#6c71c4'  # Pink color for the first folder #RBP #3883CB #RNA #CC0078
+color_hex2 = "#9AA7AC"  # Blue color for the second folder #grey reverse #667C85 ! #YBX1 #778f3e
 font_size = 20
-Plot_title=r"HOTAIR D2"  #+- 1 $\mu$M CspC 
+Plot_title=r"Cdr1as Fragment 1"  #+- 1 $\mu$M CspC 
 data1_name = "unfolding"
 data2_name = "refolding"
 
+
+#Cdr1as Fragment 1 #6c71c4
+#Cdr1as Fragment 1 + PCBP1 #cb4b16
+#Cdr1as Fragment 2 #859900
+#Cdr1as Fragment 3 #268bd2
+
 line_thickness = 2
-min_x_value, max_x_value = 800, 1449
+min_x_value, max_x_value = 800, 1849
 min_y_value, max_y_value = -1 , 44
 
 # Add a scale bar
@@ -104,7 +110,7 @@ plt.ylabel('Force, pN', fontsize=font_size)
 plt.legend(fontsize=font_size)
 
 
-save_dir = r'C:\Users\lupe184g\Desktop\Postdoc\01_Projects\OT_data\Fiona\2025_01_24_FDs_for_nice_plots'
+save_dir = r'F:\CircularRNA\Cdr1as_Fs_Data_analysis'
 os.makedirs(save_dir, exist_ok=True)  # This creates the directory if it doesn't exist
 
 file_path_png = os.path.join(save_dir, f'{data_name}_FD_curves_zoomed.png')

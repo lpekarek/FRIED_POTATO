@@ -9,6 +9,9 @@ from scipy.signal import argrelextrema
 
 # calculates the standard deviation of a dataset
 def STD(input_data, column_number):
+    if len(input_data) == 0 or len(input_data.shape) < 2 or column_number >= input_data.shape[1]:
+        print(f"WARNING in STD(): array shape {input_data.shape}, requested column {column_number}. Returning 0.0")
+        return 0.0
     dt_STD = statistics.pstdev(input_data[:, column_number])
     return dt_STD
 
@@ -38,7 +41,7 @@ def moving_median(input_data, column_number, window_size):
         mov_med.append(mm)
 
     for n in window_right:
-        mm_right = np.median(input_data[n-window_half:, column_number])
+        mm_right = np.median(input_data[n-2*window_half:, column_number])
         mov_med.append(mm_right)
 
     return mov_med
@@ -119,6 +122,110 @@ def cut_off(input_array, column_number, mm, std, z_score):
 
 # searching for minima in the force derivative to identify unfolding events
 def find_steps_F(input_settings, filename_i, Force_Distance, der_arr, orientation):
+
+    Step_length_threshold = float(input_settings['min_step_length'])
+
+    global y_vector_F
+    global F_mm2_STD2_positive
+    global F_mm2_STD2_negative
+
+    results_F = []
+    PD_start_F = []
+
+    STD_1 = STD(der_arr, 2)
+    F_mm = moving_median(der_arr, 2, input_settings['window_size'])
+    Above, Inside, Below, inside_indices_F = cut_off(der_arr, 2, F_mm, STD_1, input_settings['z-score_f'])
+
+    F_mm2_STD2_positive = []
+    F_mm2_STD2_negative = []
+    n_runs = 1
+
+    print('STD is', STD_1)
+
+    Above, Inside, Below, inside_indices_F = cut_off(der_arr, 2, F_mm, STD_1, input_settings['z-score_f'])
+    F_mm = moving_median(Inside, 2, input_settings['window_size'])
+
+    y_vector_F = []
+    last = 0
+    for n in range(len(der_arr)):
+        if n in inside_indices_F:
+            y_vector_F.append(F_mm[n])
+            last = n
+        else:
+            y_vector_F.append(F_mm[last])
+            F_mm.insert(n, F_mm[last])
+
+    for i in range(len(F_mm)):
+        F_mm2_STD2_positive.append(F_mm[i] + input_settings['z-score_f'] * STD_1)
+        F_mm2_STD2_negative.append(F_mm[i] - input_settings['z-score_f'] * STD_1)
+
+    # find the step points
+    # for those steps that cross the STD2 threshold -> find the closest 0 values prior/following to the crossing one
+
+    # for local minima
+
+
+
+    loc_min = argrelextrema((Below[:, 2]), np.less)
+
+    n_steps = 1
+
+
+    
+
+
+    for k in loc_min[0]:
+        F_dt_loc_min = Below[k, 2]
+        F_index = np.where(der_arr[:, 2] == F_dt_loc_min)
+
+        # find start and end of the step
+        i_start = F_index[0][0]
+        i_end = F_index[0][0]
+        while der_arr[i_start, 2] < F_mm[int(i_start * len(F_mm) / len(der_arr))] and i_start >= 1:
+            i_start = i_start - 1
+        if i_start == 0:
+            i_start = 1
+        while der_arr[i_end, 2] < F_mm[int(i_end * len(F_mm) / len(der_arr))] and i_end < (len(der_arr) - 2):
+            i_end = i_end + 1
+
+        PD_start_F.append(der_arr[i_start, 1])
+        dict1 = {
+            "filename": filename_i,
+            "orientation": orientation,
+            "Derivative of": 'Force',
+            'step #': n_steps,
+            'F1': der_arr[i_start, 0],
+            'F2': der_arr[i_end, 0],
+            'Fc': (der_arr[i_start, 0] + der_arr[i_end, 0]) / 2,
+            'step start': der_arr[i_start, 1],
+            'step end': der_arr[i_end, 1],
+            'step length': der_arr[i_end, 1] - der_arr[i_start, 1],
+        }
+
+        if der_arr[i_end, 1] - der_arr[i_start, 1] > (Step_length_threshold):
+
+        #if der_arr[i_end, 1] - der_arr[i_start, 1] > (Step_length_threshold*(1-1/2*(4.1/((der_arr[i_start, 0] + der_arr[i_end, 0]) / 2)/1)**(1/2)+(der_arr[i_start, 0] + der_arr[i_end, 0]) / 2/1000)):
+            results_F.append(dict1)
+
+
+        n_steps = n_steps + 1
+
+    unique_results_F = []
+    for i in range(len(results_F)):
+        if i == 0:
+            unique_results_F.append(results_F[i])
+        elif results_F[i]['step start'] != results_F[i-1]['step start']:
+            unique_results_F.append(results_F[i])
+    print("results vs unique results")
+    print(len(results_F))
+    print(len(unique_results_F))
+
+    return unique_results_F, PD_start_F
+
+
+
+#version from 04-05-2026 based on derivative 
+def find_steps_F_old(input_settings, filename_i, Force_Distance, der_arr, orientation):
     global y_vector_F
     global F_mm2_STD2_positive
     global F_mm2_STD2_negative
@@ -140,8 +247,8 @@ def find_steps_F(input_settings, filename_i, Force_Distance, der_arr, orientatio
         Above, Inside, Below, inside_indices_F = cut_off(der_arr, 2, F_mm, STD_1, input_settings['z-score_f'])
         n_runs = n_runs + 1
 
-    if STD_1 < 0.05:
-        STD_1 = 0.05
+    if STD_1 < 0.02:
+        STD_1 = 0.02
 
     print('STD is', STD_1)
 
@@ -206,8 +313,117 @@ def find_steps_F(input_settings, filename_i, Force_Distance, der_arr, orientatio
     return results_F, PD_start_F
 
 
+
 # searching for maxima in the distance derivative to identify unfolding events
 def find_steps_PD(input_settings, filename_i, Force_Distance, der_arr, orientation):
+    global y_vector_PD
+    global PD_mm2_STD2_positive
+    global PD_mm2_STD2_negative
+
+    Step_length_threshold = float(input_settings['min_step_length'])
+
+    results_PD = []
+    PD_start_PD = []
+
+    STD_1 = STD(der_arr, 3)
+    PD_mm = moving_median(der_arr, 3, input_settings['window_size'])
+
+    Above, Inside, Below, inside_indices_PD = cut_off(der_arr, 3, PD_mm, STD_1, input_settings['z-score_d'])
+
+    PD_mm2_STD2_positive = []
+    PD_mm2_STD2_negative = []
+
+
+    print(f'STD is {STD_1}')
+
+    Above, Inside, Below, inside_indices_PD = cut_off(der_arr, 3, PD_mm, STD_1, input_settings['z-score_d'])
+    PD_mm = moving_median(Inside, 3, input_settings['window_size'])
+
+    y_vector_PD = []
+    last = 0
+    for n in range(len(der_arr)):
+        if n in inside_indices_PD:
+            y_vector_PD.append(PD_mm[n])
+            last = n
+        else:
+            y_vector_PD.append(PD_mm[last])
+            PD_mm.insert(n, PD_mm[last])
+
+    for i in range(len(PD_mm)):
+        PD_mm2_STD2_positive.append(PD_mm[i] + input_settings['z-score_d'] * STD_1)
+        PD_mm2_STD2_negative.append(PD_mm[i] - input_settings['z-score_d'] * STD_1)
+
+    # find the step points
+    # for those steps that cross the 3*STD2 threshold -> find the closest 0 values prior/following to the crossing one
+
+    loc_max = argrelextrema(Above[:, 3], np.greater)
+
+    n_steps = 1
+
+
+    
+
+
+
+    for k in loc_max[0]:
+        PD_dt_loc_max = Above[k, 3]
+        PD_index = np.where(der_arr[:, 3] == PD_dt_loc_max)
+
+        # find start and end of the step
+        i_start = PD_index[0][0]
+        i_end = PD_index[0][0]
+
+        #while der_arr[i_start, 3] > PD_mm[int(i_start * len(PD_mm) / len(der_arr))] and der_arr[i_start - 1, 3] < der_arr[i_start, 3] and i_start >= 1:
+        while der_arr[i_start, 3] > PD_mm[int(i_start * len(PD_mm) / len(der_arr))] and i_start >= 1:
+            i_start = i_start - 1
+        if i_start == 0:
+            i_start = 1
+
+        #while der_arr[i_end, 3] > PD_mm[int(i_end * len(PD_mm) / len(der_arr))] and der_arr[i_end, 3] > der_arr[i_end + 1, 3] and i_end < (len(der_arr) - 2):
+        while der_arr[i_end, 3] > PD_mm[int(i_end * len(PD_mm) / len(der_arr))] and i_end < (len(der_arr) - 2):
+            i_end = i_end + 1
+
+        PD_start_PD.append(der_arr[i_start, 1])
+
+        dict1 = {
+            "filename": filename_i,
+            "orientation": orientation,
+            "Derivative of": 'Distance',
+            'step #': n_steps,
+            'F1': der_arr[i_start, 0],
+            'F2': der_arr[i_end, 0],
+            'Fc': (der_arr[i_start, 0] + der_arr[i_end, 0]) / 2,
+            'step start': der_arr[i_start, 1],
+            'step end': der_arr[i_end, 1],
+            'step length': der_arr[i_end, 1] - der_arr[i_start, 1],
+        }
+
+
+        #if der_arr[i_end, 1] - der_arr[i_start, 1] > Step_length_threshold:
+        if der_arr[i_end, 1] - der_arr[i_start, 1] > (Step_length_threshold*(1-1/2*(4.1/((der_arr[i_start, 0] + der_arr[i_end, 0]) / 2)/1)**(1/2)+(der_arr[i_start, 0] + der_arr[i_end, 0]) / 2/1000)):
+
+            results_PD.append(dict1)
+
+        
+
+
+        n_steps = n_steps + 1
+
+    unique_results_PD = []
+    for i in range(len(results_PD)):
+        if i == 0:
+            unique_results_PD.append(results_PD[i])
+        elif results_PD[i]['step start'] != results_PD[i-1]['step start']:
+            unique_results_PD.append(results_PD[i])
+    print("results vs unique results")
+    print(len(results_PD))
+    print(len(unique_results_PD))
+
+
+    return unique_results_PD, PD_start_PD
+
+#version from 04-05-2026 
+def find_steps_PD_old(input_settings, filename_i, Force_Distance, der_arr, orientation):
     global y_vector_PD
     global PD_mm2_STD2_positive
     global PD_mm2_STD2_negative
@@ -310,7 +526,9 @@ def find_common_steps(F_steps, PD_steps):
             PD_steps_dict = PD_steps[i]
 
             if step_F_middle > PD_steps_dict['step start'] and step_F_middle < PD_steps_dict['step end']:
-                new_steps = PD_steps[i]
+                
+                #new_steps = PD_steps[i]
+                new_steps = F_steps[n]
                 new_step_number = {'step #': x}
                 common_step_description = {'Derivative of': 'Common - Distance'}
                 new_steps.update(new_step_number)
@@ -318,7 +536,23 @@ def find_common_steps(F_steps, PD_steps):
                 common_steps.append(new_steps)
                 x += 1
 
-    return common_steps
+    unique_common_steps = []
+    unique_step_count = 1
+
+    for i in range(len(common_steps)):
+        if i == 0:
+            common_steps[i].update({'step #':unique_step_count})
+            unique_common_steps.append(common_steps[i])
+            
+            unique_step_count+=1
+        elif common_steps[i]['step start'] != common_steps[i-1]['step start']:
+            common_steps[i].update({'step #':unique_step_count})
+            unique_common_steps.append(common_steps[i])
+            unique_step_count+=1
+    
+
+
+    return unique_common_steps
 
 
 def calc_integral(area_1, area_2, step_start_d, step_end_d, step_start_f, step_end_f):
@@ -328,7 +562,7 @@ def calc_integral(area_1, area_2, step_start_d, step_end_d, step_start_f, step_e
 
     return work_step, work_in_kT
 
-def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Distance, derivative_array, F_trimmed, PD_trimmed, PD_start_F, PD_start_PD):
+def save_figure(export_PLOT, export_data, timestamp, filename_i, analysis_folder, Force_Distance, derivative_array, F_trimmed, PD_trimmed, PD_start_F, PD_start_PD):
     import matplotlib.pyplot as plt
     from matplotlib.figure import Figure
     from matplotlib.lines import Line2D
@@ -421,11 +655,15 @@ def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Dista
 
     if export_PLOT == 1:
         plotname = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".png"
-        figure1.savefig(plotname, dpi=600)
-        plotname_svg = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".svg"
-        figure1.savefig(plotname_svg, format='svg')
+        figure1.savefig(plotname, dpi=150)
+        
+        # Save SVG only if enabled
+        if export_data.get('export_svg', True):  # Default to True for backward compatibility
+            plotname_svg = analysis_folder + "/" + filename_i + "_plot_" + timestamp + ".svg"
+            figure1.savefig(plotname_svg, format='svg')
 
-    figure1.clf()
+    #figure1.clf()
+    plt.close(figure1)
 """def save_figure(export_PLOT, timestamp, filename_i, analysis_folder, Force_Distance, derivative_array, F_trimmed, PD_trimmed, PD_start_F, PD_start_PD):
     figure1 = Figure(figsize=(12, 8), dpi=100)
     subplot1 = figure1.add_subplot(221)

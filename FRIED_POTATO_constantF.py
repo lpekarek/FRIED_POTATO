@@ -46,14 +46,14 @@ def get_constantF(input_settings, input_format, input_constantF):
 
             if input_format['HF'] == 1:
                 # opening file and get the raw h5 values
-                Force_1x = f.get("Force HF/Force 1x")
+                Force_1x = f.get("Force HF/Force 2x")
                 Distance_1x = f.get("Distance/Piezo Distance")
                 # accessing the data frequency from the h5 file
                 Frequency_value = Force_1x.attrs['Sample rate (Hz)']
-                Force_Distance, Force_Distance_um = preprocess_RAW(Force_1x, Distance_1x, input_settings, input_format)
+                Force_Distance, Force_Distance_um, Force_Distance_ds  = preprocess_RAW(Force_1x, Distance_1x, input_settings, input_format)
 
             elif input_format['LF'] == 1:
-                load_force = f.get("Force LF/Force 1x")
+                load_force = f.get("Force LF/Force 2x")
                 Force_1x = load_force[:]['Value'][:]
                 load_distance = f.get("Distance/Distance 1")[:]
                 Distance_1x = load_distance['Value'][:]
@@ -88,10 +88,10 @@ def sum_gauss(x, *args):
 def expected_modal(input_constantF):
     # get the input values for the fit guesses (specified in POTATO_config and the GUI)
     mu = input_constantF['Mean'].split(',')
-    mu_map = map(int, mu)
+    mu_map = map(float, mu)
     mu = list(mu_map)
     sigma = input_constantF['STD'].split(',')
-    sigma_map = map(int, sigma)
+    sigma_map = map(float, sigma)
     sigma = list(sigma_map)
     A = input_constantF['Amplitude'].split(',')
     A_map = map(int, A)
@@ -126,8 +126,8 @@ def display_constantF(FD, FD_um, frequency, input_settings, input_constantF):
 
     x_min = 0
     x_max = max(time_D)+5
-    y_min = min(FD[:,1])-10
-    y_max = max(FD[:,1])+10
+    y_min = min(FD[:,1])-5
+    y_max = max(FD[:,1])+5
     
 
     # create a Figure
