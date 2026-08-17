@@ -13,8 +13,8 @@ def check_for_trap_position(file_path):
         with h5py.File(file_path, "r") as f:
             # Common paths for Lumicks C-Trap
             paths_to_check = [
-                "Trap Position/1X",
-                "Trap Position/2X",
+                "Trap position/1X",
+                "Trap position/2X",
                 "Distance/Piezo Distance" # Alternative naming
             ]
             
