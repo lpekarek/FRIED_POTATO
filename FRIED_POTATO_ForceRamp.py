@@ -26,6 +26,10 @@ def show_h5_structure(file_path):
 
 
 def read_in_data(file_num, Files, input_settings, input_format):
+        # --- NEW: Check for Trap Position data ---
+    use_trap_pos = False
+    trap_pos_fd = None
+    trap_pos_fd_ds = None
     if input_format['CSV'] == 1:
         df = pd.read_csv(Files[file_num])
         directory_i = Path(Files[file_num])
@@ -98,10 +102,6 @@ def read_in_data(file_num, Files, input_settings, input_format):
             if len(Force) == 0 or len(Distance) == 0:
                 raise ValueError(f"No data found in {Files[file_num]}")
 
-            # --- NEW: Check for Trap Position data ---
-            use_trap_pos = False
-            trap_pos_fd = None
-            trap_pos_fd_ds = None
 
             if input_format['HF'] == 1 or input_format['Min step length'] == 1:
                 try:
@@ -125,6 +125,79 @@ def read_in_data(file_num, Files, input_settings, input_format):
 
     return Force_Distance, Force_Distance_um, Frequency_value, filename_i, Force_Distance_ds, use_trap_pos, trap_pos_fd, trap_pos_fd_ds
 
+
+def read_in_data_TOMATO(file_num, Files, input_settings, input_format):
+    if input_format['CSV'] == 1:
+        df = pd.read_csv(Files[file_num])
+        directory_i = Path(Files[file_num])
+        filename_i = directory_i.name[:-4]
+        # access the raw data
+        Force = df.to_numpy()[:, 0]
+        if input_format['length_measure'] == 1:
+            Distance = df.to_numpy()[:, 1]
+        else:
+            Distance = df.to_numpy()[:, 1] / 1000
+        # accessing the data frequency from user input
+        Frequency_value = input_settings['data_frequency']  
+        
+        Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
+    
+    else:
+        with h5py.File(Files[file_num], "r") as f:
+            directory_i = Path(Files[file_num])
+            filename_i = directory_i.name[:-3]
+
+            # access the raw data
+            if input_format['HF'] == 1:
+                if input_format['Trap'] == 1:
+                    Force = f.get("Force HF/Force 1x")
+                elif input_format['Trap'] == 0:
+                    Force = f.get("Force HF/Force 2x")
+                Distance = f.get("Distance/Piezo Distance")
+                # accessing the data frequency from the h5 file
+                Frequency_value = Force.attrs['Sample rate (Hz)']
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
+
+
+            elif input_format['Min step length'] == 1:
+                if input_format['Trap'] == 1:
+                    Force = f.get("Force HF/Force 1x")
+                elif input_format['Trap'] == 0:
+                    Force = f.get("Force HF/Force 2x")
+                Distance = f.get("Distance/Piezo Distance")
+                # accessing the data frequency from the h5 file
+                Frequency_value = Force.attrs['Sample rate (Hz)']
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
+
+            elif input_format['LF'] == 1:
+                if input_format['Trap'] == 1:
+                    load_force = f.get("Force LF/Force 1x")
+                    Force = load_force[:]['Value'][:]
+                    try:
+                        load_distance = f.get("Distance/Distance 1x")[:]
+                    except:
+                        load_distance = f.get("Distance/Distance 2")[:]
+                    Distance = load_distance['Value'][:]
+                elif input_format['Trap'] == 0:
+                    load_force = f.get("Force LF/Force 2x")
+                    Force = load_force[:]['Value'][:]
+                    try:
+                        load_distance = f.get("Distance/Distance 2x")[:]
+                    except:
+                        load_distance = f.get("Distance/Distance 1")[:]
+                    Distance = load_distance['Value'][:]
+
+                Force_Distance, Force_Distance_um, Force_Distance_ds = preprocess_RAW(Force, Distance, input_settings, input_format)
+
+                # calculating the data frequency based on start- and end-time of the measurement
+                size_F_LF = len(Force)
+                stop_time_F_LF = load_force.attrs['Stop time (ns)']
+                timestamp_F_LF = load_force.attrs['Start time (ns)']
+                Frequency_value = size_F_LF / ((stop_time_F_LF - timestamp_F_LF) / 10**9)
+
+            
+
+    return Force_Distance, Force_Distance_um, Frequency_value, filename_i, Force_Distance_ds
 
 # open a folder containing raw data and lead through the analysis process
 def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_format, export_data, input_fitting, output_q):

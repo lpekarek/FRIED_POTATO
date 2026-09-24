@@ -78,7 +78,7 @@ for file_name, group in combined_df_f.groupby("File"):
     fig.add_trace(go.Scatter(x=group["Distance [nm]"], 
                              y=group["Force [pN]"], 
                              mode='lines', 
-                             name=file_name, 
+                             name=file_name[:-35], 
                              hoverinfo="name", 
                              showlegend=True,
                              line=dict(color=color_scheme_colors[color_index])))
@@ -90,7 +90,7 @@ for file_name, group in combined_df_r.groupby("File"):
     fig.add_trace(go.Scatter(x=group["Distance [nm]"], 
                              y=group["Force [pN]"], 
                              mode='lines', 
-                             name=file_name, 
+                             name=file_name[:-35], 
                              hoverinfo="name", 
                              showlegend=True,
                              line=dict(color=color_scheme_base[color_index])))
