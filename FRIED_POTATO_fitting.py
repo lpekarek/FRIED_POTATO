@@ -46,6 +46,15 @@ def safe_get_param(fit_obj, param_name):
         pass
 
     return np.nan, np.nan, ''
+def finalize_fit_status(fit_dict):
+    """Downgrade 'success' to 'non_converged' if key outputs are not finite."""
+    key_outputs = [fit_dict.get('log_likelihood'),
+                   fit_dict.get('Lc_ds')]
+    if fit_dict.get('model_type') not in ('WLC_ODIJK_DS',):
+        key_outputs.append(fit_dict.get('Lc_ss'))
+    if not all(np.isfinite(v) for v in key_outputs if v is not None):
+        fit_dict['fit_status'] = 'non_converged'
+    return fit_dict
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -148,6 +157,7 @@ def fitting_ds(filename_i, input_settings, export_data, input_fitting, i_start, 
         'fit_status': 'success'
     }
     #print(ds_fit_dict)
+    finalize_fit_status(ds_fit_dict)
     return ds_fit_dict, area_ds, start_step1, fit_ds
 
 def fitting_FU(filename_i, input_settings, export_data, input_fitting,
@@ -313,7 +323,7 @@ def fitting_FU(filename_i, input_settings, export_data, input_fitting,
         return val if val is not None else 0, err if err is not None else np.nan
 
     ds_fit_dict = {
-        'model': 'WLC',
+        'model_type': 'WLC_ODIJK_FULLY_UNFOLDED',
         'log_likelihood': fit_qual,
         'Lc_ds': get_fit_val('ds_part/Lc')[0],
         'Lc_ds_stderr': get_fit_val('ds_part/Lc')[1],
@@ -325,20 +335,20 @@ def fitting_FU(filename_i, input_settings, export_data, input_fitting,
         'f_offset_ds_stderr': get_fit_val('ds_part/f_offset')[1],
         'd_offset_ds': get_fit_val('offset/d_offset')[0],
         'd_offset_ds_stderr': get_fit_val('offset/d_offset')[1],
-        'Lc_ss_RNA': get_fit_val('RNA/Lc')[0],
-        'Lc_ss_RNA_stderr': get_fit_val('RNA/Lc')[1],
-        'Lp_ss_RNA': get_fit_val('RNA/Lp')[0],
-        'Lp_ss_RNA_stderr': get_fit_val('RNA/Lp')[1],
-        'St_ss_RNA': get_fit_val('RNA/St')[0],
-        'St_ss_RNA_stderr': get_fit_val('RNA/St')[1],
-        'f_offset_RNA': get_fit_val('RNA/f_offset')[0],
-        'f_offset_RNA_stderr': get_fit_val('RNA/f_offset')[1],
-        'model_type': 'WLC_ODIJK_FULLY_UNFOLDED',
-        'fit_status': 'success',
-        'Lc_ss': 0, 'Lc_ss_stderr': np.nan, 'Lp_ss': np.nan, 'Lp_ss_stderr': np.nan,
-        'St_ss': np.nan, 'St_ss_stderr': np.nan, 'f_offset_ss': np.nan, 'f_offset_ss_stderr': np.nan,
-        'd_offset_ss': np.nan, 'd_offset_ss_stderr': np.nan
+        # map the RNA (ss) parameters onto the canonical _ss columns
+        'Lc_ss': get_fit_val('RNA/Lc')[0],
+        'Lc_ss_stderr': get_fit_val('RNA/Lc')[1],
+        'Lp_ss': get_fit_val('RNA/Lp')[0],
+        'Lp_ss_stderr': get_fit_val('RNA/Lp')[1],
+        'St_ss': get_fit_val('RNA/St')[0],
+        'St_ss_stderr': get_fit_val('RNA/St')[1],
+        'f_offset_ss': get_fit_val('RNA/f_offset')[0],
+        'f_offset_ss_stderr': get_fit_val('RNA/f_offset')[1],
+        'd_offset_ss': np.nan,
+        'd_offset_ss_stderr': np.nan,
+        'fit_status': 'success'
     }
+    finalize_fit_status(ds_fit_dict)
     return ds_fit_dict, area_ds, start_step1, fit_FU
 
 
@@ -455,7 +465,7 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
         'model_type': fitting_model,
         'fit_status': 'success'
     }
-
+    finalize_fit_status(ss_fit_dict)
     return fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict, area_ds
 
 def fitting_ss(filename_i, input_settings, export_data, input_fitting, i_start, i_end, Force_Distance, fix, max_range, derivative_array, F_low, TOMATO_param):
@@ -579,6 +589,7 @@ def fitting_ss(filename_i, input_settings, export_data, input_fitting, i_start, 
         'model_type': fitting_model,
         'fit_status': 'success'
     }
+    finalize_fit_status(ss_fit_dict)
     return fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict, area_ss_fit_start, area_ss_fit_end
 
 def plot_fit(fit, start_force_ss, start_distance_ss, Force_Distance, Force_Distance_ds, save_folder, filename_i, start_time, export_data, model_FU=None, model_ds_final=None):

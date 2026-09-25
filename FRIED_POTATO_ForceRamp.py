@@ -16,6 +16,51 @@ from FRIED_POTATO_find_steps import find_steps_F,find_steps_F_old, find_steps_PD
 from FRIED_POTATO_processMultiH5 import split_H5
 
 
+# ---------------------------------------------------------------------------
+# Canonical fit-result schema. MUST match the header written to
+# total_results_<timestamp>.csv in start_subprocess().
+# ---------------------------------------------------------------------------
+FIT_HEADER = [
+    'model_type', 'log_likelihood',
+    'Lc_ds', 'Lc_ds_stderr', 'Lp_ds', 'Lp_ds_stderr',
+    'St_ds', 'St_ds_stderr', 'f_offset_ds', 'f_offset_ds_stderr',
+    'd_offset_ds', 'd_offset_ds_stderr',
+    'Lc_ss', 'Lc_ss_stderr', 'Lp_ss', 'Lp_ss_stderr',
+    'St_ss', 'St_ss_stderr', 'f_offset_ss', 'f_offset_ss_stderr',
+    'd_offset_ss', 'd_offset_ss_stderr',
+    'Work_(pN*nm)', 'Work_(kB*T)',
+    'delta Lc', 'total Lc', 'total W', 'total number of steps',
+    'fit_status'
+]
+
+
+def make_failed_fit_row(status_msg):
+    """Schema-conformant placeholder for a fit that raised an exception."""
+    row = {key: np.nan for key in FIT_HEADER}
+    row['fit_status'] = status_msg
+    return row
+
+def write_total_rows(filename_total_results, filename_i, steps_df, fit_df):
+    """Concatenate step + fit results and append them to the total CSV,
+    guaranteeing the output columns exactly match the file header."""
+    expected = list(steps_df.columns) + FIT_HEADER
+
+    if list(fit_df.columns) != FIT_HEADER:
+        print(f"WARNING [{filename_i}]: fit columns mismatch, re-aligning: "
+              f"{list(fit_df.columns)}")
+        fit_df = fit_df.reindex(columns=FIT_HEADER)
+
+    results_total_total = pd.concat([steps_df, fit_df], axis=1)
+
+    if list(results_total_total.columns) != expected:
+        print(f"WARNING [{filename_i}]: column mismatch after concat: "
+              f"{list(results_total_total.columns)}")
+
+    results_total_total.to_csv(filename_total_results, mode='a',
+                               index=False, header=False)
+
+
+
 """define the functions of the subprocess processing the data"""
 
 
@@ -206,42 +251,10 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         filename_total_results = analysis_folder + '/total_results_' + timestamp + '.csv'
 
         with open(filename_total_results, 'w') as f:
-            #f.write('>Common steps from all curves of the folder:\n') #messes up with reading this file later
             head = (
-                'filename',
-                'orientation',
-                'Derivative of',
-                'step number',
-                'F1',
-                'F2',
-                'Fc',
-                'step start',
-                'step end',
-                'step length',
-                # Fitting parameters - ds region
-                'model_type',
-                'log_likelihood',
-                'Lc_ds', 'Lc_ds_stderr',
-                'Lp_ds', 'Lp_ds_stderr',
-                'St_ds', 'St_ds_stderr',
-                'f_offset_ds', 'f_offset_ds_stderr',
-                'd_offset_ds', 'd_offset_ds_stderr',
-                # Fitting parameters - ss region
-                'Lc_ss', 'Lc_ss_stderr',
-                'Lp_ss', 'Lp_ss_stderr',
-                'St_ss', 'St_ss_stderr',
-                'f_offset_ss', 'f_offset_ss_stderr',
-                'd_offset_ss', 'd_offset_ss_stderr',
-                # Work calculations
-                'Work_(pN*nm)',
-                'Work_(kB*T)',
-                # Additional computed fields
-                "delta Lc",
-                "total Lc",
-                "total W",
-                "total number of steps",
-                'fit_status'
-            )
+                'filename', 'orientation', 'Derivative of', 'step number',
+                'F1', 'F2', 'Fc', 'step start', 'step end', 'step length'
+            ) + tuple(FIT_HEADER)
             f.write(','.join(head))
             f.write('\n')
 
@@ -325,33 +338,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
             total_results_steps = pd.DataFrame()
 
             # create dataframe to store all fitting parameters of all curves in the folder
-            header_fit = [
-                #"filename",
-                "model_type",
-                "log_likelihood",
-                # ds_region parameters
-                'Lc_ds', 'Lc_ds_stderr',
-                'Lp_ds', 'Lp_ds_stderr',
-                'St_ds', 'St_ds_stderr',
-                'f_offset_ds', 'f_offset_ds_stderr',
-                'd_offset_ds', 'd_offset_ds_stderr',
-                # ss_region parameters
-                'Lc_ss', 'Lc_ss_stderr',
-                'Lp_ss', 'Lp_ss_stderr',
-                'St_ss', 'St_ss_stderr',
-                'f_offset_ss', 'f_offset_ss_stderr',
-                'd_offset_ss', 'd_offset_ss_stderr',
-                # Work
-                'Work_(pN*nm)',
-                'Work_(kB*T)',
-                'delta Lc',
-                'total Lc',
-                'total W',
-                "total number of steps",
-                'fit_status'
-            ]
 
-            total_results_fit = pd.DataFrame(columns=header_fit)
+            total_results_fit = pd.DataFrame(columns=FIT_HEADER)
 
             if num_curves == 1:
                 filename_i = filename
@@ -414,7 +402,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     # Write a dummy row to total_results so CSV export doesn't break
                     results_total_total = pd.concat([
                         pd.DataFrame({'filename': filename_i}, index=[0]),
-                        pd.DataFrame(columns=header_fit)
+                        pd.DataFrame(columns=FIT_HEADER)
                     ], axis=1)
                     if export_data['export_TOTAL'] == 1:
                         results_total_total.to_csv(filename_total_results, mode='a', index=False, header=False)
@@ -561,9 +549,10 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     traceback.print_exc()
 
                 # append common steps to the 'step 0'
+                # append common steps to the 'step 0'
                 if common_steps:
-                    for x in range(len(common_steps)):
-                        common_steps_results.append(common_steps[x])
+                    for cs in range(len(common_steps)):
+                        common_steps_results.append(common_steps[cs])
 
                     # convert common steps to dataframe for export
                     common_steps_results = pd.DataFrame(common_steps_results)
@@ -581,17 +570,6 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                     total_results_steps = pd.concat([total_results_steps, common_steps_results], ignore_index=True, sort=False)
 
                 '''if common steps were found, try to fit FD-Curve'''
-                empty = {
-                    'filename': filename_i,
-                    'model': 'None',
-                    'log_likelihood': 'None',
-                    'Lc_ds': 'None',
-                    'Lp_ds': 'None',
-                    'Lp_ds_stderr': 'None',
-                    'St_ds': 'None',
-                    'f_offset': 'None',
-                    'd_offset': 'None'
-                }
 
                 if export_data['export_FIT'] == 1:
                     try:
@@ -645,7 +623,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
 
                                 except Exception as e:
-                                    export_fit.append(empty)
+                                    export_fit.append(make_failed_fit_row(f'error: {type(e).__name__}: {e}'))
                                     
                                     print(f"Error: {e}")
                                     traceback.print_exc()
@@ -703,7 +681,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                         integral_ss_fit_end.append(area_ss_fit_end)
 
                                     except Exception as e:
-                                        export_fit.append(empty)
+                                        export_fit.append(make_failed_fit_row(f'error: {type(e).__name__}: {e}'))
                                         print("something went wrong with the middle part of ss fitting")
                                         print(f"Error: {e}")
                                         traceback.print_exc()
@@ -734,7 +712,7 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                 integral_ss_fit_end.append(area_ss_fit_end)
 
                             except Exception as e:
-                                export_fit.append(empty)
+                                export_fit.append(make_failed_fit_row(f'error: {type(e).__name__}: {e}'))
                                 print("something went wrong with the last part of ss fitting")
                                 print(f"Error: {e}")
                                 traceback.print_exc()
@@ -797,23 +775,11 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                 export_fit.append(export_fit_ds)
                                 print("no common steps found")
                         
-                        # If export_fit is a list of dictionaries, convert it to a DataFrame
-                        if isinstance(export_fit, list):
-                            export_fit_df = pd.DataFrame(export_fit)
-                        else:
-                            export_fit_df = export_fit
-
-                        # Convert any remaining complex objects to strings or NaN
-                        for col in export_fit_df.columns:
-                            if export_fit_df[col].dtype == object:
-                                # Check if column contains non-numeric objects
-                                try:
-                                    pd.to_numeric(export_fit_df[col], errors='raise')
-                                except:
-                                    # Replace non-serializable objects with NaN or descriptive strings
-                                    export_fit_df[col] = export_fit_df[col].apply(
-                                        lambda x: np.nan if hasattr(x, '__dict__') or callable(x) else str(x)
-                                    )
+                        # Build the fit DataFrame on the canonical schema:
+                        # unknown keys are dropped, missing keys become NaN.
+                        export_fit_df = pd.DataFrame(export_fit or [],
+                                                     columns=FIT_HEADER)
+                        export_fit_df = export_fit_df.reindex(columns=FIT_HEADER)
 
                         # Use pd.concat to append the data
                         total_results_fit = pd.concat([total_results_fit, export_fit_df], ignore_index=True, sort=False)
@@ -892,8 +858,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                         pass
 
 
-                results_total_total = pd.concat([total_results_steps, total_results_fit], axis=1)
-                results_total_total.to_csv((filename_total_results), mode='a', index=False, header=False)
+                write_total_rows(filename_total_results, filename_i,
+                                 total_results_steps, total_results_fit)
 
                 print('done', x + 1, 'curves from', len(curves))
                 out_progress = str('File ' + str(file_num + 1) + ': Done ' + str(x + 1) + ' curves from ' + str(len(curves)))
@@ -902,8 +868,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                 print(filename_i)
                 output_q.put(filename_i)
             else:
-                results_total_total = pd.concat([total_results_steps, total_results_fit], axis=1)
-                results_total_total.to_csv((filename_total_results), mode='a', index=False, header=False)
+                write_total_rows(filename_total_results, filename_i,
+                                                total_results_steps, total_results_fit)
 
                 print('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
                 output_q.put('This curve was below the Force threshold and could not be processed!\nPlease check if the correct trap was selected.')
@@ -927,22 +893,16 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
         output_q.put(out_progress)
 
             # --- MEMORY CLEANUP START ---
-        # Explicitly delete large local variables
-        del Force_Distance
-        del Force_Distance_um
-        del Force_Distance_ds
-        del derivative_array
-        del F_trimmed
-        del PD_trimmed
-        del common_steps
-        del results_F_list
-        del results_PD_list
-        del export_fit
-        del fit
-        del start_force_ss
-        del start_distance_ss
-        
-        # Force garbage collection to reclaim memory immediately
+        try:
+            del Force_Distance, Force_Distance_um, Force_Distance_ds, \
+                derivative_array, F_trimmed, PD_trimmed, common_steps, \
+                results_F_list, results_PD_list, export_fit, fit, \
+                start_force_ss, start_distance_ss
+        except NameError:
+            # Some names were never created this iteration
+            # (skipped curve / below force threshold)
+            pass
+
         gc.collect()
         # --- MEMORY CLEANUP END ---
 
