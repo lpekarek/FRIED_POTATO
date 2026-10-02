@@ -247,6 +247,7 @@ def read_in_data_TOMATO(file_num, Files, input_settings, input_format):
 # open a folder containing raw data and lead through the analysis process
 def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_format, export_data, input_fitting, output_q):
     # create file to store total results
+    
     if export_data['export_TOTAL'] == 1:
         filename_total_results = analysis_folder + '/total_results_' + timestamp + '.csv'
 

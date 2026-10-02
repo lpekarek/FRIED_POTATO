@@ -13,6 +13,7 @@
     Alternatively they can be changed permanently in the POTATO_config file"""
 
 import tkinter as tk
+import traceback
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
@@ -53,10 +54,57 @@ if system_platform == "Windows":
 
 
 """define the functions used in the GUI"""
+def log_error(error_message, analysis_folder=None, timestamp=None):
+    """
+    Logs error messages to a text file in the analysis folder.
+    
+    Args:
+        error_message: The error message to log
+        analysis_folder: Path to the analysis folder (optional, uses global if not provided)
+        timestamp: Timestamp for the log entry (optional, generates current time if not provided)
+    """
+    if analysis_folder is None:
+        analysis_folder = globals().get('analysis_folder', None)
+    
+    if analysis_folder is None or not os.path.exists(analysis_folder):
+        # If no valid folder, print to console instead
+        print(f"ERROR LOG (couldn't save to file): {error_message}")
+        return
+    
+    if timestamp is None:
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+    
+    error_log_path = os.path.join(analysis_folder, f'error_log_{timestamp}.txt')
+    
+    try:
+        with open(error_log_path, 'w') as f:
+            f.write(f"FRIED POTATO ERROR LOG\n")
+            f.write(f"Timestamp: {timestamp}\n")
+            f.write(f"{'='*50}\n\n")
+            f.write(f"Error Message:\n{error_message}\n")
+            f.write(f"\n{'='*50}\n")
+            f.write(f"This error occurred during FRIED POTATO analysis.\n")
+            f.write(f"Please contact the developers with this log file for assistance.\n")
+        
+        print(f"Error logged to: {error_log_path}")
+    except Exception as e:
+        print(f"Failed to write error log: {e}")
+        print(f"Original error: {error_message}")
+
+
 
 def build_parameter_code(input_settings, input_format):
     """Builds a short parameter code for the analysis folder name.
-    Format: M<x>_<approach>_DS<x>_<filter>_<FMin>"""
+    Format: M<x>_<approach>_DS<x>_<filter>_<FMin>_ZF<x>_ZD<x>[_MSL<x>]"""
+
+    # helper to safely format GUI strings as floats
+    def fmt_g(key, default=0.0):
+        val = input_settings.get(key)
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
     # MultiH5 ticked or not
     code_m = 'M1' if input_format['MultiH5'] == 1 else 'M0'
 
@@ -64,84 +112,103 @@ def build_parameter_code(input_settings, input_format):
     code_step = 'MSL' if input_format['Min_step_length'] == 1 else 'DER'
 
     # Downsampling rate
-    code_ds = f"DS{int(input_settings['downsample_value'])}"
+    code_ds = f"DS{int(fmt_g('downsample_value'))}"
 
     # Filter type + settings.
-    # NOTE: the 'Filter degree' entry doubles as SG polynomial order, and the
-    # 'Cut-off frequency' entry doubles as SG window length (same GUI fields).
     if input_settings['filter_type'] == 'savgol':
-        code_filter = f"SG_PO{int(input_settings['filter_degree'])}_WL{int(input_settings['filter_cut_off'])}"
+        code_filter = f"SG_PO{int(fmt_g('filter_degree'))}_WL{int(fmt_g('filter_cut_off'))}"
     else:
-        code_filter = f"BW_FD{int(input_settings['filter_degree'])}_CO{input_settings['filter_cut_off']:g}"
+        code_filter = f"BW_FD{int(fmt_g('filter_degree'))}_CO{fmt_g('filter_cut_off'):g}"
 
     # Minimum force threshold
-    code_fm = f"FM{input_settings['F_min']:g}"
+    code_fm = f"FM{fmt_g('F_min'):g}"
 
-    return '_'.join([code_m, code_step, code_ds, code_filter, code_fm])
+    # Z-score values (force and distance)
+    code_zf = f"ZF{fmt_g('z-score_f'):g}"
+    code_zd = f"ZD{fmt_g('z-score_d'):g}"
+
+    # Minimum step length (only if MSL is active)
+    code_msl = ''
+    if input_format['Min_step_length'] == 1:
+        msl_val = fmt_g('min_step_length', default=float('nan'))
+        if msl_val == msl_val:  # not NaN
+            code_msl = f"MSL{msl_val:g}"
+
+    base_parts = [code_m, code_step, code_ds, code_filter, code_fm, code_zf, code_zd]
+    if code_msl:
+        base_parts.append(code_msl)
+
+    return '_'.join(base_parts)
 
 # get settings, get folder directory, create analysis results folder
 def start_analysis():
     global p0
     global analysis_folder
+    try: 
+        # check user input
+        input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
-    # check user input
-    input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
+        # ask wich directory should be analysed
+        folder = tk.filedialog.askdirectory()
+        root.title('FRIED POTATO -- ' + str(folder))
 
-    # ask wich directory should be analysed
-    folder = tk.filedialog.askdirectory()
-    root.title('FRIED POTATO -- ' + str(folder))
-
-    # decide which input format was choosen
-    if input_format['CSV'] == 1:
-        folder_path = str(folder + "/*.csv")
-    else:
-        folder_path = str(folder + "/*.h5")
-
-    Files = glob.glob(folder_path)
-
-    # print number of files to analyse, if no files found give an error
-    print('Files to analyse', len(Files))
-    output_window.insert("end", 'Files to analyse: ' + str(len(Files)) + "\n")
-    output_window.see("end")
-    if not len(Files) == 0:
-        output_window.insert("end", 'Analysis in progress. Please do not close the program! \n')
-
-        # print starting time of the analysis
-        timestamp = time.strftime("%Y%m%d-%H%M%S")
-        print("Timestamp: " + timestamp)
-        output_window.insert("end", 'Start of analysis: ' + str(timestamp) + "\n")
-        output_window.see("end")
-
-        # build short parameter code for the folder name
-        param_code = build_parameter_code(input_settings, input_format)
-
-        # create a folder for the analysis results
-        if input_format['reverse_fitting'] == 1:
-            analysis_folder = str(folder + f'/Analysis_RF_{param_code}_{timestamp}')
+        # decide which input format was choosen
+        if input_format['CSV'] == 1:
+            folder_path = str(folder + "/*.csv")
         else:
-            analysis_folder = str(folder + f'/Analysis_{param_code}_{timestamp}')
-        os.mkdir(analysis_folder)
+            folder_path = str(folder + "/*.h5")
 
-        # export configuration file with used parameters
-        export_settings(analysis_folder, timestamp, input_settings, input_fitting, input_format)
+        Files = glob.glob(folder_path)
 
-        # start analysis in a new process
-        p0 = mp.Process(target=start_subprocess, name='Process-0', args=(
-            analysis_folder,
-            timestamp,
-            Files,
-            input_settings,
-            input_format,
-            export_data,
-            input_fitting,
-            output_q,
-        ))
+        # print number of files to analyse, if no files found give an error
+        print('Files to analyse', len(Files))
+        output_window.insert("end", 'Files to analyse: ' + str(len(Files)) + "\n")
+        output_window.see("end")
+        if not len(Files) == 0:
+            output_window.insert("end", 'Analysis in progress. Please do not close the program! \n')
 
-        p0.daemon = True
-        p0.start()
+            # print starting time of the analysis
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            print("Timestamp: " + timestamp)
+            output_window.insert("end", 'Start of analysis: ' + str(timestamp) + "\n")
+            output_window.see("end")
 
-    else:
-        output_window.insert("end", 'No file of the selected data type in the folder! \n')
+            # build short parameter code for the folder name
+            param_code = build_parameter_code(input_settings, input_format)
+
+            # create a folder for the analysis results
+            if input_format['reverse_fitting'] == 1:
+                analysis_folder = str(folder + f'/Analysis_RF_{param_code}_{timestamp}')
+            else:
+                analysis_folder = str(folder + f'/Analysis_{param_code}_{timestamp}')
+            os.mkdir(analysis_folder)
+
+            # export configuration file with used parameters
+            export_settings(analysis_folder, timestamp, input_settings, input_fitting, input_format)
+
+            # start analysis in a new process
+            p0 = mp.Process(target=start_subprocess_wrapper, name='Process-0', args=(
+                analysis_folder,
+                timestamp,
+                Files,
+                input_settings,
+                input_format,
+                export_data,
+                input_fitting,
+                output_q,
+            ))
+
+            p0.daemon = True
+            p0.start()
+
+        else:
+            output_window.insert("end", 'No file of the selected data type in the folder! \n')
+            output_window.see("end")
+    except Exception as e:
+        error_msg = f"GUI Error during analysis setup:\n{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        log_error(error_msg, analysis_folder if 'analysis_folder' in locals() else None, 
+                  timestamp if 'timestamp' in locals() else None)
+        output_window.insert("end", f'ERROR: {str(e)}\n')
         output_window.see("end")
 
 
@@ -435,6 +502,27 @@ def export_settings(analysis_path, timestamp, input_1, input_2, input_3):
         config_used.write(json.dumps(input_3, indent=4, sort_keys=False))
 
 # Looks for output of the subprocess
+
+def start_subprocess_wrapper(analysis_folder, timestamp, files, input_settings, input_format, export_data, input_fitting, output_queue):
+    """
+    Wrapper for start_subprocess that catches and logs errors.
+    """
+    import traceback
+    
+    try:
+        # Call the original start_subprocess function
+        start_subprocess(analysis_folder, timestamp, files, input_settings, input_format, export_data, input_fitting, output_queue)
+    except Exception as e:
+        error_msg = f"Subprocess Error during analysis:\n{str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        log_error(error_msg, analysis_folder, timestamp)
+        
+        # Also send error message to the output queue so it appears in GUI
+        try:
+            output_queue.put(f"ERROR: Analysis failed - {str(e)}")
+            output_queue.put(f"Error details saved to: {os.path.join(analysis_folder, f'error_log_{timestamp}.txt')}")
+        except:
+            print(f"Critical error in subprocess: {error_msg}")
+
 def refresh():
     global new_image
     while output_q.empty() is False:
