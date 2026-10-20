@@ -188,7 +188,7 @@ def fitting_FU(filename_i, input_settings, export_data, input_fitting,
         i_start_distance = Force_Distance[s, 1] if s < len(Force_Distance) else Force_Distance[-1, 1]
 
     else:  # TOMATO_param == 1
-        start_step1 = find_nearest(Force_Distance[:, 1], i_start)
+        start_step1 = find_nearest(Force_Distance[:, 1], first_step_start)
 
         raw_f_fitting_region_low = Force_Distance[0:(int(start_step1/3)), 0]
         raw_d_fitting_region_low = Force_Distance[0:(int(start_step1/3)), 1]
@@ -378,17 +378,17 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
     elif input_fitting['WLC+WLC'] == 1:
         model_ss = lk.ewlc_odijk_distance("DNA_2") + lk.ewlc_odijk_distance("RNA") 
     
-    # CRITICAL FIX: Ensure we are using the correct inverted chain
+    # CRITICAL FIX: Ensure inversion is applied correctly
     model_ss = model_ss.invert().subtract_independent_offset()+ lk.force_offset("DNA")
     
     fit_ss = lk.FdFit(model_ss)
     fit_ss.add_data("ss_part", f_fitting_region_ss, d_fitting_region_ss)
 
-    # Parameters setup (unchanged logic)
+    # Ported from fitting_ss — relies on ds_fit_dict set by fitting_FU
     fit_ss["DNA_2/Lp"].value = ds_fit_dict['Lp_ds']
     fit_ss["DNA_2/Lp"].upper_bound = ds_fit_dict['Lp_ds'] * (1 + max_range / 100)
     fit_ss["DNA_2/Lp"].lower_bound = ds_fit_dict['Lp_ds'] * (1 - max_range / 100)
-    if fix==1: fit_ss["DNA_2/Lp"].fixed = True
+    if fix == 1: fit_ss["DNA_2/Lp"].fixed = True
 
     fit_ss["DNA/f_offset"].upper_bound = 5
     fit_ss["DNA/f_offset"].lower_bound = -5
@@ -402,7 +402,7 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
     fit_ss["DNA_2/Lc"].lower_bound = ds_fit_dict['Lc_ds'] * (1 - max_range / 100)
     fit_ss["DNA_2/Lc"].value = ds_fit_dict['Lc_ds']
     fit_ss["DNA_2/Lc"].unit = 'nm'
-    if fix==1: fit_ss["DNA_2/Lc"].fixed = True
+    if fix == 1: fit_ss["DNA_2/Lc"].fixed = True
 
     fit_ss["DNA_2/St"].upper_bound = ds_fit_dict['St_ds'] * (1 + max_range / 100)
     fit_ss["DNA_2/St"].lower_bound = ds_fit_dict['St_ds'] * (1 - max_range / 100)
@@ -425,17 +425,19 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
     fit_ss["RNA/Lc"].unit = 'nm'
 
     fit_ss.fit()
-    #print(fit_ss.params)
+    
+    # ADDED: Calculate integrals for work computation (same pattern as fitting_ss)
+    distance_integral_fit_start = np.arange(min(Force_Distance[:, 1]), i_end)
+    ss_integral_start = model_ss(distance_integral_fit_start, fit_ss.params)
+    area_ss_fit_start = simps(ss_integral_start)
 
-    distance_integral = np.arange(min(Force_Distance[:, 1]), i_end)
-    ds_integral = model_ds(distance_integral, fit_ds.params)
-    area_ds = simps(ds_integral)
+    distance_integral_fit_end = np.arange(min(Force_Distance[:, 1]), i_end)
+    ss_integral_end = model_ss(distance_integral_fit_end, fit_ss.params)
+    area_ss_fit_end = simps(ss_integral_end)
 
     fit_qual = fit_ss.log_likelihood()
-
     fitting_model = "WLC+WLC" if input_fitting["WLC+WLC"] == 1 else "WLC+FJC"
 
-    # CRITICAL FIX: Use safe_get_param for inverted model keys
     def get_val(key):
         val, err, _ = safe_get_param(fit_ss, key)
         return val if val is not None else 0, err if err is not None else np.nan
@@ -449,9 +451,9 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
         'St_ds': get_val('DNA_2/St')[0],
         'St_ds_stderr': get_val('DNA_2/St')[1],
         'f_offset_ds': get_val('DNA/f_offset')[0],
-        'f_offset_ds_stderr': get_val('DNA/f_offset')[1],
+        'f_offset_ss_stderr': get_val('DNA/f_offset')[1],
         'd_offset_ds': get_val('inv(DNA_2_with_RNA)/d_offset')[0],
-        'd_offset_ds_stderr': get_val('inv(DNA_2_with_RNA)/d_offset')[1],
+        'd_offset_ss_stderr': get_val('inv(DNA_2_with_RNA)/d_offset')[1],
         'Lc_ss': get_val('RNA/Lc')[0],
         'Lc_ss_stderr': get_val('RNA/Lc')[1],
         'Lp_ss': get_val('RNA/Lp')[0],
@@ -466,7 +468,8 @@ def fitting_FU_ss(filename_i, input_settings, export_data, input_fitting, i_star
         'fit_status': 'success'
     }
     finalize_fit_status(ss_fit_dict)
-    return fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict, area_ds
+    # FIXED RETURN: Now returns 6 values like fitting_ss
+    return fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict, area_ss_fit_start, area_ss_fit_end
 
 def fitting_ss(filename_i, input_settings, export_data, input_fitting, i_start, i_end, Force_Distance, fix, max_range, derivative_array, F_low, TOMATO_param):
     global model_ss

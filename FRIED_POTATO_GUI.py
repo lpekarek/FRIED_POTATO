@@ -32,7 +32,7 @@ from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data,read_in_data_T
 from FRIED_POTATO_preprocessing import create_derivative
 from FRIED_POTATO_config import default_values_HF,default_values_HF_noise, default_values_HF_SavGol, default_values_LF, default_values_CSV, default_values_FIT, default_values_constantF
 from FRIED_POTATO_constantF import get_constantF, display_constantF, fit_constantF
-from FRIED_POTATO_fitting import fitting_ds, fitting_ss
+from FRIED_POTATO_fitting import fitting_ds, fitting_ss, fitting_FU, fitting_FU_ss
 from FRIED_POTATO_find_steps import calc_integral
 import FRIED_POTATO_fitting 
 # To avoid blurry GUI - DPI scaling
@@ -563,11 +563,11 @@ def get_single_file(format):
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     import_file_path = tk.filedialog.askopenfilename()
     input_format['preprocess'] = 0
-    FD_raw, FD_raw_um, Frequency_value, filename, FD_ds = read_in_data(0, [import_file_path], input_settings, input_format)
+    FD_raw, FD_raw_um, Frequency_value, filename, FD_ds = read_in_data_TOMATO(0, [import_file_path], input_settings, input_format)
     #Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO, Force_Distance_TOMATO_ds
 
     input_format['preprocess'] = 1
-    FD, FD_um, Frequency_value, filename, FD_ds = read_in_data(0, [import_file_path], input_settings, input_format)
+    FD, FD_um, Frequency_value, filename, FD_ds = read_in_data_TOMATO(0, [import_file_path], input_settings, input_format)
     display_RAW_FD(FD[:, 0], FD[:, 1], FD_raw[:, 0], FD_raw[:, 1], filename)
 
 
@@ -900,10 +900,13 @@ def analyze_steps():
     global TOMATO_fig1
     global subplot1
     global tree_results
-
+    global ds_fit_dict_TOMATO
     # get input settings
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    # FIX: nanosecond resolution timestamp. The seconds-resolution one collided
+    # with leftover rows from a previous analysis run in the same second,
+    # producing "Item ... already exists" TclErrors on re-analysis.
+    timestamp = str(time.time_ns())
 
     # determine orientation the same way the batch analysis does
     # ('orientation' is a global set in change_FD; fall back to 'forward' if unset)
@@ -980,56 +983,171 @@ def analyze_steps():
             'fit_status': fit_dict.get('fit_status', '')
         }
 
+    # --- NEW: Reverse fitting support for TOMATO ---
+    reverse_fitting_enabled = input_format.get('reverse_fitting', 0) == 1
+    
+    if reverse_fitting_enabled:
+        print("REVERSE FITTING ENABLED - Using inverted models")
+    
     for i in treeview_df.index:
         # part before first step is fitted with a single WLC model (ds part)
+       # part before first step is fitted with a single WLC model (ds part)
         if treeview_df['Step number'][i] == 1:
             j = treeview_df['Step number'][i]
-            ds_fit_dict_TOMATO, TOMATO_area_ds, real_step_start, fit_ds  = fitting_ds(filename_TOMATO, input_settings, export_data, input_fitting, float(treeview_df['Step start'][i]), Force_Distance_TOMATO, der_arr_TOMATO, [], 1)
-            ds_fit_region_end = real_step_start
+            
+            # --- REVERSE FITTING BRANCH ---
+            if reverse_fitting_enabled:
+                # Use fitting_FU for reverse fitting (fully unfolded region analysis)
+                # Note: fitting_FU expects different parameter ordering
+                ds_fit_dict_TOMATO, TOMATO_area_ds, real_step_start, model_FU_obj = fitting_FU(
+                    filename_TOMATO,
+                    input_settings,
+                    export_data,
+                    input_fitting,
+                    float(treeview_df['Step start'][i]),                   # first_step_start (low-force region boundary)
+                    float(treeview_df['Step end'][len(treeview_df) - 1]),  # i_start = end of the LAST marked step
+                    max(Force_Distance_TOMATO[:, 1]),                      # i_end = very end of the dataset
+                    Force_Distance_TOMATO,
+                    der_arr_TOMATO,
+                    [],  # F_low - not used in TOMATO mode
+                    1    # TOMATO_param = 1
+                )
 
-            dsLp_variable.set(ds_fit_dict_TOMATO['Lp_ds'])
-            f_off_variable.set(ds_fit_dict_TOMATO['f_offset_ds'])
-            d_off_variable.set(ds_fit_dict_TOMATO["d_offset_ds"])
-            dsLc_variable.set(ds_fit_dict_TOMATO['Lc_ds'])
-            stiff_ds_variable.set(ds_fit_dict_TOMATO['St_ds'])
+                # Fit the first region (start -> first step start) with the ss model,
+                # using the ds parameters extracted by fitting_FU (same as batch)
+                fit_ss, f_fitting_region_ss, d_fitting_region_ss, first_region_dict, area_ss_fit_start, area_ss_fit_end = fitting_FU_ss(
+                    filename_TOMATO,
+                    input_settings,
+                    export_data,
+                    input_fitting,
+                    0,
+                    float(treeview_df['Step start'][i]),
+                    Force_Distance_TOMATO,
+                    1, 1,
+                    der_arr_TOMATO,
+                    [],
+                    1
+                )
 
-            tree_results.insert("", "end", iid='{}no step'.format(timestamp), values=(
-                entryText_filename.get(),
-                i,
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-                dsLc_variable.get(),
-                dsLp_variable.get(),
-                stiff_ds_variable.get(),
-                '',
-                '',
-                '',
-                f_off_variable.get(),
-                d_off_variable.get(),
-                '',
-                ''
-            )
-            )
+                fit.append(fit_ss)
+                start_force_ss.append(f_fitting_region_ss)
+                start_distance_ss.append(d_fitting_region_ss)
+                integral_ss_fit_start.append(area_ss_fit_start)
+                integral_ss_fit_end.append(area_ss_fit_end)
+                export_fit.append(first_region_dict)
+                rows_for_export.append(make_export_row(first_region_dict, step_number=0))
 
-            # --- NEW: batch-compatible row for the ds region (step number 0, like the batch 'no step' row) ---
-            rows_for_export.append(make_export_row(ds_fit_dict_TOMATO, step_number=0))
+                # GUI fields: ds parameters from the FU fit
+                dsLp_variable.set(ds_fit_dict_TOMATO['Lp_ds'])
+                dsLc_variable.set(ds_fit_dict_TOMATO['Lc_ds'])
+                stiff_ds_variable.set(ds_fit_dict_TOMATO['St_ds'])
+                ssLp_variable.set(first_region_dict['Lp_ss'])
+                ssLc_variable.set(first_region_dict['Lc_ss'])
+                stiff_ss_variable.set(first_region_dict['St_ss'])
+                f_off_variable.set(first_region_dict['f_offset_ss'])
+                d_off_variable.set(first_region_dict['d_offset_ss'])
 
-            export_fit.append(ds_fit_dict_TOMATO)
+                # Results row for the region before the first step (ss values, like the other ss rows)
+                tree_results.insert("", "end", iid='{}no step'.format(timestamp), values=(
+                    entryText_filename.get(),
+                    i,
+                    '', '', '', '', '', '',
+                    '', '', '',
+                    ssLc_variable.get(), ssLp_variable.get(), stiff_ss_variable.get(),
+                    f_off_variable.get(), d_off_variable.get(),
+                    '', ''
+                ))
 
-            F_ds_model = FRIED_POTATO_fitting.model_ds(distance, fit_ds.params)
-            fit_data["Fit_ds"] = F_ds_model
-            # plot the marked ds region and fits
-            subplot1.plot(Force_Distance_TOMATO[:, 1][:real_step_start], Force_Distance_TOMATO[:, 0][:real_step_start], color=diff_colors[i])
-            subplot1.plot(distance, F_ds_model, marker=None, linestyle='dashed', linewidth=1, color="black")
+                # Plot the fitted region and model (mirrors the forward ss-region plotting)
+                F_ss_model = FRIED_POTATO_fitting.model_ss(distance, fit_ss.params)
+                fit_data[f"Fit_ss_{i}"] = F_ss_model
+                subplot1.plot(d_fitting_region_ss, f_fitting_region_ss, color=diff_colors[i])
+                subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
+                
+                ds_fit_region_end = real_step_start
+
+            else:
+                # Standard fitting_ds for normal forward analysis
+                ds_fit_dict_TOMATO, TOMATO_area_ds, real_step_start, fit_ds = fitting_ds(
+                    filename_TOMATO,
+                    input_settings,
+                    export_data,
+                    input_fitting,
+                    float(treeview_df['Step start'][i]),
+                    Force_Distance_TOMATO,
+                    der_arr_TOMATO,
+                    [],
+                    1
+                )
+
+                dsLp_variable.set(ds_fit_dict_TOMATO['Lp_ds'])
+                f_off_variable.set(ds_fit_dict_TOMATO['f_offset_ds'])
+                d_off_variable.set(ds_fit_dict_TOMATO["d_offset_ds"])
+                dsLc_variable.set(ds_fit_dict_TOMATO['Lc_ds'])
+                stiff_ds_variable.set(ds_fit_dict_TOMATO['St_ds'])
+
+                tree_results.insert("", "end", iid='{}no step'.format(timestamp), values=(
+                    entryText_filename.get(),
+                    i,
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    '',
+                    dsLc_variable.get(),
+                    dsLp_variable.get(),
+                    stiff_ds_variable.get(),
+                    '',
+                    '',
+                    '',
+                    f_off_variable.get(),
+                    d_off_variable.get(),
+                    '',
+                    ''
+                ))
+
+
+
+                # Plot the marked ds region and fits
+                F_ds_model = FRIED_POTATO_fitting.model_ds(distance, fit_ds.params)
+                subplot1.plot(Force_Distance_TOMATO[:, 1][:real_step_start], Force_Distance_TOMATO[:, 0][:real_step_start], color=diff_colors[i])
+                subplot1.plot(distance, F_ds_model, marker=None, linestyle='dashed', linewidth=1, color="black")
+                
+                ds_fit_region_end = real_step_start
+
+            if not reverse_fitting_enabled:
+                # Forward mode only: the ds fit IS the row for the region before
+                # the first step. In reverse mode this was already appended above
+                # via first_region_dict; appending here again would duplicate the
+                # step-0 row with the fully-unfolded (FU) parameters.
+                rows_for_export.append(make_export_row(ds_fit_dict_TOMATO, step_number=0))
+                export_fit.append(ds_fit_dict_TOMATO)
 
         # fit the other ss parts
         elif treeview_df['Step number'][i] > 1:
             j = treeview_df['Step number'][i]
-            fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict_TOMATO, area_ss_fit_start, area_ss_fit_end = fitting_ss(filename_TOMATO, input_settings, export_data, input_fitting, float(treeview_df['Step end'][i - 1]), float(treeview_df['Step start'][i]), Force_Distance_TOMATO, 1, 1, der_arr_TOMATO, [], 1)
+
+            # FIX 2: always use fitting_ss for intermediate regions, regardless of
+            # reverse fitting. fitting_FU_ss cannot fit a region *between* two steps
+            # (in TOMATO mode it always fits from the start of the curve up to i_end),
+            # and the batch pipeline also uses fitting_ss here in reverse mode.
+            # The ds parameters come from the global ds_fit_dict, which fitting_FU
+            # set during the step-1 branch.
+            fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict_TOMATO, area_ss_fit_start, area_ss_fit_end = fitting_ss(
+                filename_TOMATO,
+                input_settings,
+                export_data,
+                input_fitting,
+                float(treeview_df['Step end'][i - 1]),
+                float(treeview_df['Step start'][i]),
+                Force_Distance_TOMATO,
+                1,
+                1,
+                der_arr_TOMATO,
+                [],
+                1
+            )
 
             fit.append(fit_ss)
             start_force_ss.append(f_fitting_region_ss)
@@ -1063,8 +1181,7 @@ def analyze_steps():
                 d_off_variable.get(),
                 '',
                 ''
-            )
-            )
+            ))
 
             # --- NEW: batch-compatible row for this ss region ---
             rows_for_export.append(make_export_row(
@@ -1082,14 +1199,14 @@ def analyze_steps():
             real_step_start = real_step_start[0][0]
 
             # plot the marked regions and fits
-            # model data
             F_ss_model = FRIED_POTATO_fitting.model_ss(distance, fit_ss.params)
             fit_data[f"Fit_ss_{i}"] = F_ss_model
-            # plot the marked ss region and fits
             subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[i])
             subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
 
     # fit the last part of the curve
+    # FIX 2: always use fitting_ss for the last region, regardless of reverse fitting.
+    # The ds parameters come from the global ds_fit_dict (set by fitting_FU in reverse mode).
     fit_ss, f_fitting_region_ss, d_fitting_region_ss, ss_fit_dict_TOMATO, area_ss_fit_start, area_ss_fit_end = fitting_ss(
         filename_TOMATO,
         input_settings,
@@ -1137,8 +1254,7 @@ def analyze_steps():
         d_off_variable.get(),
         '',
         ''
-    )
-    )
+    ))
 
     # --- NEW: batch-compatible row for the last ss region ---
     rows_for_export.append(make_export_row(
@@ -1177,8 +1293,7 @@ def analyze_steps():
             tree_results.set('{}step{}'.format(timestamp, n+1), column='Work [pN*nm]', value=work_step_n)
             tree_results.set('{}step{}'.format(timestamp, n+1), column='Work [kT]', value=kT_n)
 
-    # --- NEW: assign Work values to the export rows (same scheme as the batch analysis:
-    #     row of step 1 gets work of the first step, row of step n+1 gets work of step n) ---
+    # --- Assign Work values to export rows ---
     for row in rows_for_export:
         if row['step number'] == 1:
             row['Work_(pN*nm)'] = work_first_step
@@ -1199,19 +1314,16 @@ def analyze_steps():
                     row['Work_(pN*nm)'] = work_step_n
                     row['Work_(kB*T)'] = kT_n
 
-    # --- NEW: compute the batch-style derived fields (delta Lc / totals) and append to file ---
+    # --- Compute batch-style derived fields and append to file ---
     if rows_for_export:
         init_tomato_total_results()
-
         export_df = pd.DataFrame(rows_for_export, columns=TOMATO_TOTAL_HEADER)
 
-        # Force the numeric columns to numeric dtype; blanks/'#N/A'/unparseable
-        # entries become NaN so .sum()/.diff() work reliably.
+        # Force numeric columns to proper dtype
         numeric_cols = ['Lc_ss', 'Work_(pN*nm)', 'Work_(kB*T)']
         for col in numeric_cols:
             export_df[col] = pd.to_numeric(export_df[col], errors='coerce')
 
-        # replicate the 'tab shift' logic of start_subprocess:
         export_df['delta Lc'] = export_df['Lc_ss'].diff().fillna("#N/A")
         export_df['total Lc'] = "#N/A"
         export_df['total W'] = "#N/A"
@@ -1222,7 +1334,6 @@ def analyze_steps():
         except (IndexError, KeyError):
             pass
         try:
-            # .sum() now works: NaNs from non-step rows are skipped automatically
             total_W = export_df['Work_(kB*T)'].sum()
             if pd.isna(total_W):
                 total_W = "#N/A"
@@ -1234,18 +1345,13 @@ def analyze_steps():
         except (IndexError, KeyError):
             pass
 
-        # blank cells export as empty rather than 'nan' (keeps the file tidy like the batch output)
         export_df = export_df.replace({np.nan: ''})
-
         export_df.to_csv(tomato_total_results_file, mode='a', index=False, header=False)
         print(f"Appended {len(export_df)} result rows to {tomato_total_results_file}")
-    # --- END NEW ---
 
-    # plot the marked regions and fits
-    # model data
+    # plot the final marked regions and fits
     F_ss_model = FRIED_POTATO_fitting.model_ss(distance, fit_ss.params)
     fit_data[f"Fit_ss_{i}"] = F_ss_model
-    # plot the marked ss region and fits
     subplot1.plot(d_fitting_region_ss[:], f_fitting_region_ss, color=diff_colors[j + 1])
     subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
 
@@ -2131,9 +2237,12 @@ if __name__ == '__main__':
     amplitude_gauss.grid(row=9, column=1, padx=(0, 20), pady=2, sticky="ew")
 
     """organize tab5 ---- TOMATO"""
-    tab5.grid_rowconfigure(0, weight=1)   # plot area absorbs all extra space
-    tab5.grid_rowconfigure(2, weight=0)   # filename entry + results table: natural height, always visible
-    tab5.grid_columnconfigure(0, weight=1)
+
+    tab5.grid_rowconfigure(0, weight=0)   # row 0: buttons (fixed height)
+    tab5.grid_rowconfigure(1, weight=1)   # row 1: plot area (absorbs extra space)
+    tab5.grid_rowconfigure(2, weight=0)   # row 2: filename entry + results table (natural height)
+    tab5.grid_columnconfigure(0, weight=1)   # col 0: plot takes remaining space
+    tab5.grid_columnconfigure(1, weight=0)   # col 1: parameter panel (fixed width)
 
     # CHANGE THIS: Use Frame instead of Canvas
     TOMATO_figure_frame = tk.Frame(tab5, borderwidth=1, relief='ridge')
@@ -2144,8 +2253,186 @@ if __name__ == '__main__':
     TOMATO_button_frame = tk.Frame(tab5)
     TOMATO_button_frame.grid(row=0, column=1, sticky="nw", padx=4, pady=4)
 
+
+   # === PREPROCESSING & INPUT FORMAT PANEL FOR TOMATO (SHARED WITH TAB 1) ===
+    TOMATO_panel = tk.LabelFrame(tab5, text="Analysis Settings", 
+                                 font='Helvetica 9 bold', relief='groove', bd=2)
+    TOMATO_panel.grid(row=1, column=1, sticky="nsew", padx=4, pady=4)
+    TOMATO_panel.grid_columnconfigure(1, weight=1)
+
+    # --- Input Format Selection (Radio-button style - mutually exclusive) ---
+
+
+    def select_input_format(*boxes):
+        for i in boxes:
+            if i.get() == 1:
+                for n in boxes:
+                    if not n == i:
+                        n.set(value=0)
+        # Auto-update parameters based on selection
+        if check_box_HF.get() == 1:
+            parameters(default_values_HF, default_values_FIT, default_values_constantF)
+        elif check_box_LF.get() == 1:
+            parameters(default_values_LF, default_values_FIT, default_values_constantF)
+        elif check_box_CSV.get() == 1:
+            parameters(default_values_CSV, default_values_FIT, default_values_constantF)
+
+    check_HF_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="High Frequency (Piezo Distance)",
+        variable=check_box_HF,
+        command=lambda: [select_input_format(check_box_HF, check_box_LF, check_box_CSV)]
+    )
+    check_HF_TOMATO.grid(row=1, column=0, columnspan=2, sticky='W', padx=5, pady=1)
+
+    check_LF_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Low Frequency",
+        variable=check_box_LF,
+        command=lambda: [select_input_format(check_box_HF, check_box_LF, check_box_CSV)]
+    )
+    check_LF_TOMATO.grid(row=1, column=2, columnspan=2, sticky='W', padx=5, pady=1)
+
+    check_CSV_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="CSV (F(pN) | d)",
+        variable=check_box_CSV,
+        command=lambda: [select_input_format(check_box_CSV, check_box_HF, check_box_LF)]
+    )
+    check_CSV_TOMATO.grid(row=1, column=4, columnspan=2, sticky='W', padx=5, pady=1)
+
+    # --- Trap Configuration ---
+
+
+    check_Trap1_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Trap 1x",
+        variable=check_box_Trap1,
+        command=lambda: select_input_format(check_box_Trap1, check_box_Trap2)
+    )
+    check_Trap1_TOMATO.grid(row=5, column=0, sticky='W', padx=5, pady=1)
+
+    check_Trap2_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Trap 2x",
+        variable=check_box_Trap2,
+        command=lambda: select_input_format(check_box_Trap2, check_box_Trap1)
+    )
+    check_Trap2_TOMATO.grid(row=5, column=1, sticky='W', padx=5, pady=1)
+
+    # --- Distance Unit Selection ---
+
+
+    check_um_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="µm input",
+        variable=check_box_um,
+        command=lambda: select_input_format(check_box_um, check_box_nm)
+    )
+    check_um_TOMATO.grid(row=5, column=2, sticky='W', padx=5, pady=1)
+
+    check_nm_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="nm input",
+        variable=check_box_nm,
+        command=lambda: select_input_format(check_box_nm, check_box_um)
+    )
+    check_nm_TOMATO.grid(row=5, column=4, sticky='W', padx=5, pady=1)
+
+    # --- Advanced Options ---
+
+
+
+    """check_multi_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="MultiH5",
+        variable=check_box_multiH5
+    )
+    check_multi_TOMATO.grid(row=10, column=0, sticky='W', padx=5, pady=1)"""
+
+    check_revfit_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Reverse Fitting",
+        variable=check_box_reverse_fitting
+    )
+    check_revfit_TOMATO.grid(row=6, column=0, columnspan=2,sticky='W', padx=5, pady=1)
+
+    check_augment_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Data Augmentation",
+        variable=check_box_augment,
+        command=lambda: show_augment()
+    )
+    check_augment_TOMATO.grid(row=6, column=1, columnspan=2, sticky='W', padx=5, pady=1)
+
+    """check_steplen_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Min step length",
+        variable=check_box_min_step_length,
+        command=lambda: [parameters(default_values_HF_noise, default_values_FIT, default_values_constantF), show_min_step_length()]
+    )
+    check_steplen_TOMATO.grid(row=, column=0, columnspan=2, sticky='W', padx=5, pady=1)"""
+
+    check_savgol_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="SavGol filt.",
+        variable=check_box_SavGol,
+        command=lambda: [show_savgol_labels(), parameters(default_values_HF_SavGol, default_values_FIT, default_values_constantF)]
+    )
+    check_savgol_TOMATO.grid(row=6, column=2, columnspan=2, sticky='W', padx=5, pady=1)
+
+    check_pre_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Preprocessing",
+        variable=check_box_preprocess
+    )
+    check_pre_TOMATO.grid(row=6, column=4, columnspan=2, sticky='W', padx=5, pady=1)
+
+    # --- Preprocessing Parameters (shared with Tab 1) ---
+    lbl_preprocessing = tk.Label(TOMATO_panel, text='PARAMETERS', font='Helvetica 8 bold')
+    lbl_preprocessing.grid(row=14, column=0, columnspan=3, pady=(10, 0), sticky='w')
+
+    # Downsampling rate
+    lbl_ds_TOMATO = tk.Label(TOMATO_panel, text='Downsampling rate')
+    lbl_ds_TOMATO.grid(row=15, column=0, sticky='e', padx=5, pady=2)
+    ent_ds_TOMATO = tk.Entry(TOMATO_panel, textvariable=downsample_value, width=10)
+    ent_ds_TOMATO.grid(row=15, column=1, padx=5, pady=2)
+
+    # Filter degree (label changes based on SavGol selection)
+    lbl_filt_deg_TOMATO = tk.Label(TOMATO_panel, text='Filter degree')
+    lbl_filt_deg_TOMATO.grid(row=16, column=0, sticky='e', padx=5, pady=2)
+    ent_filt_deg_TOMATO = tk.Entry(TOMATO_panel, textvariable=Filter_degree, width=10)
+    ent_filt_deg_TOMATO.grid(row=16, column=1, padx=5, pady=2)
+
+    # Cut-off frequency / Window length
+    lbl_cutoff_TOMATO = tk.Label(TOMATO_panel, text='Cut-off frequency')
+    lbl_cutoff_TOMATO.grid(row=17, column=0, sticky='e', padx=5, pady=2)
+    ent_cutoff_TOMATO = tk.Entry(TOMATO_panel, textvariable=Filter_cut_off, width=10)
+    ent_cutoff_TOMATO.grid(row=17, column=1, padx=5, pady=2)
+
+    # Force threshold
+    lbl_fmin_TOMATO = tk.Label(TOMATO_panel, text='Force threshold (pN)')
+    lbl_fmin_TOMATO.grid(row=18, column=0, sticky='e', padx=5, pady=2)
+    ent_fmin_TOMATO = tk.Entry(TOMATO_panel, textvariable=Force_Min, width=10)
+    ent_fmin_TOMATO.grid(row=18, column=1, padx=5, pady=2)
+
+    # Z-score force
+    lbl_zf_TOMATO = tk.Label(TOMATO_panel, text='Z-score force')
+    lbl_zf_TOMATO.grid(row=19, column=0, sticky='e', padx=5, pady=2)
+    ent_zf_TOMATO = tk.Entry(TOMATO_panel, textvariable=Z_score_force, width=10)
+    ent_zf_TOMATO.grid(row=19, column=1, padx=5, pady=2)
+
+    # Z-score distance
+    lbl_zd_TOMATO = tk.Label(TOMATO_panel, text='Z-score distance')
+    lbl_zd_TOMATO.grid(row=20, column=0, sticky='e', padx=5, pady=2)
+    ent_zd_TOMATO = tk.Entry(TOMATO_panel, textvariable=Z_score_distance, width=10)
+    ent_zd_TOMATO.grid(row=20, column=1, padx=5, pady=2)
+
+    # ===============================================
+
+    # Fitting parameters panel (moved below the new input/preprocessing panel)
     TOMATO_parameter_frame = tk.Frame(tab5, borderwidth=1, relief='ridge')
-    TOMATO_parameter_frame.grid(row=1, column=1, sticky="nw", padx=4, pady=4)
+    TOMATO_parameter_frame.grid(row=2, column=1, sticky="nsew", padx=4, pady=4)
 
     TOMATO_frame_table = tk.Frame(tab5)
     TOMATO_frame_table.grid(row=2, column=0, sticky="nsew", padx=2, pady=2)
@@ -2229,7 +2516,7 @@ if __name__ == '__main__':
     button_reset_parameters = tk.Button(TOMATO_button_frame, text='Reset parameters', command=lambda: parameters(0, default_values_FIT, default_values_constantF) if check_box_HF == 1 else (parameters(default_values_HF, default_values_FIT, default_values_constantF) if check_box_LF == 1 else parameters(default_values_CSV, default_values_FIT, default_values_constantF)), bg='palegreen2', font=('Arial', 11, 'bold'))
     button_reset_parameters.grid(row=1, column=1, padx=4, pady=4, sticky="ew")
 
-    label_info = tk.Label(TOMATO_button_frame, text='TOMATO is unresponsive during fitting, please be patient\n\nmark step start <s>\n mark step end <e>\n save marked step <Ctrl+s>\n start analysis <Ctrl+f>\n delete results line <mark+del>\n next curve <Right arrow>\n previous curve <Left arrow>')
+    label_info = tk.Label(TOMATO_button_frame, text='TOMATO is unresponsive during fitting, please be patient\nmark step start <s>   mark step end <e>\n save marked step <Ctrl+s>   start analysis <Ctrl+f>\n delete results line <mark+del>\n previous curve <Left arrow>   next curve <Right arrow>')
     label_info.grid(row=2, column=0, padx=4, pady=4)
 
     button_start = tk.Button(TOMATO_parameter_frame, text='Set start', command=start_click, bg='lightsteelblue2', font=('Arial', 10, 'bold'))

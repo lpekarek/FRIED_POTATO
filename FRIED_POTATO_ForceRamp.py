@@ -600,7 +600,8 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                         0
                                     )
 
-                                    fit_ss, f_fitting_region_ss, d_fitting_region_ss, export_fit_ds, area_ds = fitting_FU_ss(
+                                    # FIXED: 6 return values now, and area_ds from fitting_FU is NOT overwritten
+                                    fit_ss, f_fitting_region_ss, d_fitting_region_ss, export_fit_ds_FU_ss, area_ss_fit_start, area_ss_fit_end = fitting_FU_ss(
                                             filename_i,
                                             input_settings,
                                             export_data,
@@ -614,40 +615,29 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
                                             F_low,
                                             0
                                         )
-                                    
-                                    
+
                                     fit.append(fit_ss)
                                     start_force_ss.append(f_fitting_region_ss)
                                     start_distance_ss.append(d_fitting_region_ss)
-                                    
-                                   
+                                    # FIXED: work calculation below needs these populated
+                                    integral_ss_fit_start.append(area_ss_fit_start)
+                                    integral_ss_fit_end.append(area_ss_fit_end)
 
+                                    # keeps the existing unconditional `export_fit.append(export_fit_ds)` working
+                                    export_fit_ds = export_fit_ds_FU_ss
 
                                 except Exception as e:
-                                    export_fit.append(make_failed_fit_row(f'error: {type(e).__name__}: {e}'))
-                                    
+                                    # FIXED: don't append here — assign instead, so the shared
+                                    # `export_fit.append(export_fit_ds)` further down stays valid.
+                                    # Otherwise export_fit_ds stays unbound -> the UnboundLocalError you saw.
+                                    export_fit_ds = make_failed_fit_row(f'error: {type(e).__name__}: {e}')
                                     print(f"Error: {e}")
                                     traceback.print_exc()
                                     print('Something went wrong with reverse fitting!')
-                                    
+
                             else:
-
-                                # fit part between start of the FD-cure up to the first common step
-                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(
-                                    filename_i,
-                                    input_settings,
-                                    export_data,
-                                    input_fitting,
-                                    float(common_steps[0]['step start']),
-                                    Force_Distance_ds,
-                                    derivative_array,
-                                    F_low,
-                                    0
-                                )
-
-
-
-
+                                # unchanged
+                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(...)
 
                             export_fit.append(export_fit_ds)
 
