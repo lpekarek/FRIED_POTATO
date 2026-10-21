@@ -39,8 +39,25 @@ def preprocess_RAW(Force, Distance, input_settings, input_format):
 
     if input_format['preprocess'] == 1:
         # Downsample
-        Force_ds = Force[::input_settings['downsample_value']]
-        Distance_ds = Distance[::input_settings['downsample_value']]
+        if input_format['anti-aliasing'] == 1:
+
+            # use decimate for anti-aliasing while downsampling
+            Force_ds = signal.decimate(
+                Force,
+                q=input_settings['downsample_value'],
+                ftype="iir",
+                zero_phase=True,
+            )
+            Distance_ds = signal.decimate(
+                Distance,
+                q=input_settings['downsample_value'],
+                ftype="iir",
+                zero_phase=True,
+            )
+            print('Anti-Aliasing was applied.')
+        else:
+            Force_ds = Force[::input_settings['downsample_value']]
+            Distance_ds = Distance[::input_settings['downsample_value']]
 
         # Filter Logic
         filter_type = input_settings.get('filter_type', 'butterworth')

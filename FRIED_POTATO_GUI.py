@@ -403,6 +403,7 @@ def load_parameters():
             check_box_nm.set('1')
         check_box_multiH5.set(str(default_input_format['MultiH5']))
         check_box_preprocess.set(str(default_input_format['preprocess']))
+        check_box_antialiasing.set(str(default_input_format['anti-aliasing']))
         try:
             check_box_reverse_fitting.set(str(default_input_format['reverse_fitting']))
         except:
@@ -438,6 +439,7 @@ def check_settings():
         'length_measure': check_box_um.get(),
         'MultiH5': check_box_multiH5.get(),
         'preprocess': check_box_preprocess.get(),
+        'anti-aliasing': check_box_antialiasing.get(),
         'reverse_fitting':check_box_reverse_fitting.get(),
         'Min_step_length':check_box_min_step_length.get()
     }
@@ -1579,6 +1581,7 @@ if __name__ == '__main__':
     check_box_nm = tk.IntVar()
     check_box_multiH5 = tk.IntVar()
     check_box_preprocess = tk.IntVar(value=1)
+    check_box_antialiasing = tk.IntVar(value=1)
     check_box_reverse_fitting = tk.IntVar()
     check_box_min_step_length = tk.IntVar()
     check_box_SavGol = tk.IntVar()
@@ -1681,18 +1684,21 @@ if __name__ == '__main__':
         variable=check_box_preprocess
     ).grid(row=0, column=1, pady=(20, 2), sticky='W')
 
-    Label_downsample = tk.Label(parameter_frame, text='Downsampling rate')
+    Label_antialiasing = tk.Label(parameter_frame, text='Anti-Aliasing', font='Helvetica 9')
+    check_antialiasing = tk.Checkbutton(
+        parameter_frame,
+        variable=check_box_antialiasing
+    )
 
+    Label_downsample = tk.Label(parameter_frame, text='Downsampling rate')
 
     Label_Filter1 = tk.Label(parameter_frame, text='Butterworth filter degree')
     Label_Filter2 = tk.Label(parameter_frame, text='Cut-off frequency')
-
 
     Label_ForceMin = tk.Label(parameter_frame, text='Force threshold, pN')
     Cluster_statistics = tk.Label(parameter_frame, text='STATISTICS', font='Helvetica 9 bold')
     Label_Zscore_F = tk.Label(parameter_frame, text='Z-score force')
     Label_Zscore_D = tk.Label(parameter_frame, text='Z-score distance')
-    
 
     Cluster_augment = tk.Label(parameter_frame, text='AUGMENTATION', font='Helvetica 9 bold')
     Label_augment_factor = tk.Label(parameter_frame, text='Augmentation factor')
@@ -1771,10 +1777,10 @@ if __name__ == '__main__':
 
         # 3. Create new labels at the specific grid positions
         Label_Filter1 = tk.Label(parameter_frame, text=text_1)
-        Label_Filter1.grid(row=2, column=0, padx=2, pady=2, sticky="w")
+        Label_Filter1.grid(row=3, column=0, padx=2, pady=2, sticky="w")
         
         Label_Filter2 = tk.Label(parameter_frame, text=text_2)
-        Label_Filter2.grid(row=3, column=0, padx=2, pady=2, sticky="w")
+        Label_Filter2.grid(row=4, column=0, padx=2, pady=2, sticky="w")
 
     show_savgol_labels() 
     downsample_value = tk.StringVar()
@@ -1799,24 +1805,28 @@ if __name__ == '__main__':
     min_step_length1 = tk.Entry(parameter_frame, textvariable=min_step_length_value)   
 
     Cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
-    Label_downsample.grid(row=1, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    downsample_value1.grid(row=1, column=1, padx=2, pady=2, sticky="ew")
 
-    Label_Filter1.grid(row=2, column=0, padx=2, pady=2, sticky="w")
-    Filter_degree1.grid(row=2, column=1, padx=2, pady=2, sticky="ew")
+    Label_antialiasing.grid(row=1, column=0, padx=2, pady=2, sticky="ew")
+    check_antialiasing.grid(row=1, column=1, pady=2, sticky="w")
 
-    Label_Filter2.grid(row=3, column=0, padx=2, pady=2, sticky="w")
-    Filter_cut_off1.grid(row=3, column=1, padx=2, pady=2, sticky="ew")
+    Label_downsample.grid(row=2, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    downsample_value1.grid(row=2, column=1, padx=2, pady=2, sticky="ew")
 
-    Label_ForceMin.grid(row=4, column=0, padx=2, pady=2)
-    Force_Min1.grid(row=4, column=1, padx=2, pady=2, sticky="ew")
+    Label_Filter1.grid(row=3, column=0, padx=2, pady=2, sticky="w")
+    Filter_degree1.grid(row=3, column=1, padx=2, pady=2, sticky="ew")
 
-    Cluster_statistics.grid(row=5, column=0, padx=2, pady=(20, 2))
-    Label_Zscore_F.grid(row=6, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    Z_score_force1.grid(row=6, column=1, padx=2, pady=2, sticky="ew")
+    Label_Filter2.grid(row=4, column=0, padx=2, pady=2, sticky="w")
+    Filter_cut_off1.grid(row=4, column=1, padx=2, pady=2, sticky="ew")
 
-    Label_Zscore_D.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    Z_score_distance1.grid(row=7, column=1, padx=2, pady=2, sticky="ew")
+    Label_ForceMin.grid(row=5, column=0, padx=2, pady=2)
+    Force_Min1.grid(row=5, column=1, padx=2, pady=2, sticky="ew")
+
+    Cluster_statistics.grid(row=6, column=0, padx=2, pady=(20, 2))
+    Label_Zscore_F.grid(row=7, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    Z_score_force1.grid(row=7, column=1, padx=2, pady=2, sticky="ew")
+
+    Label_Zscore_D.grid(row=8, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    Z_score_distance1.grid(row=8, column=1, padx=2, pady=2, sticky="ew")
 
 
     
@@ -1885,6 +1895,7 @@ if __name__ == '__main__':
     frame3.grid(row=0, column=2, sticky="nsew", padx=(5, 2))
 
     """ parameters in advanced settings """
+    
     Cluster_preprocessing = tk.Label(frame1, text='PREPROCESSING', font='Helvetica 9 bold')
     Label_downsample = tk.Label(frame1, text='Downsampling rate')
     Label_Filter1 = tk.Label(frame1, text='Butterworth filter degree')
@@ -1901,6 +1912,12 @@ if __name__ == '__main__':
     Label_min_step_length = tk.Label(frame1, text='Min contour length, nm')
 
     frame1.grid_columnconfigure(1, weight=1)
+
+    check_antialiasing_advanced = tk.Checkbutton(
+        frame1,
+        text="Anti-Aliasing",
+        variable=check_box_antialiasing,
+    )
 
     # parameters that occur double (tab1 and tab4)
     downsample_value2 = tk.Entry(frame1, textvariable=downsample_value)
@@ -1925,37 +1942,40 @@ if __name__ == '__main__':
     Frequency_value = tk.Entry(frame1, textvariable=Frequency_variable)
 
     Cluster_preprocessing.grid(row=0, column=0, padx=2, pady=(20, 2))
-    Label_downsample.grid(row=1, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    downsample_value2.grid(row=1, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Label_Filter1.grid(row=2, column=0, padx=2, pady=2)
-    Filter_degree2.grid(row=2, column=1, padx=(0, 20), pady=2, sticky="ew")
+    check_antialiasing_advanced.grid(row=1, column=0, padx=2, pady=2, sticky="ew")
 
-    Label_Filter2.grid(row=3, column=0, padx=2, pady=2)
-    Filter_cut_off2.grid(row=3, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_downsample.grid(row=2, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    downsample_value2.grid(row=2, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Label_ForceMin.grid(row=4, column=0, padx=2, pady=2)
-    Force_Min2.grid(row=4, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_Filter1.grid(row=3, column=0, padx=2, pady=2)
+    Filter_degree2.grid(row=3, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Cluster_derivative.grid(row=5, column=0, padx=2, pady=(20, 2))
-    Label_step_d.grid(row=6, column=0, padx=2, pady=2)
-    step_d_value.grid(row=6, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_Filter2.grid(row=4, column=0, padx=2, pady=2)
+    Filter_cut_off2.grid(row=4, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Label_Frequency.grid(row=7, column=0, padx=2, pady=2)
-    Frequency_value.grid(row=7, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_ForceMin.grid(row=5, column=0, padx=2, pady=2)
+    Force_Min2.grid(row=5, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Cluster_statistics.grid(row=8, column=0, padx=2, pady=(20, 2))
-    Label_Zscore_F.grid(row=9, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    Z_score_force2.grid(row=9, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Cluster_derivative.grid(row=6, column=0, padx=2, pady=(20, 2))
+    Label_step_d.grid(row=7, column=0, padx=2, pady=2)
+    step_d_value.grid(row=7, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Label_Zscore_D.grid(row=10, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
-    Z_score_distance2.grid(row=10, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_Frequency.grid(row=8, column=0, padx=2, pady=2)
+    Frequency_value.grid(row=8, column=1, padx=(0, 20), pady=2, sticky="ew")
+
+    Cluster_statistics.grid(row=9, column=0, padx=2, pady=(20, 2))
+    Label_Zscore_F.grid(row=10, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    Z_score_force2.grid(row=10, column=1, padx=(0, 20), pady=2, sticky="ew")
+
+    Label_Zscore_D.grid(row=11, column=0, sticky=tk.E + tk.W, padx=2, pady=2)
+    Z_score_distance2.grid(row=11, column=1, padx=(0, 20), pady=2, sticky="ew")
 
     Label_window_size.grid(row=12, column=0, padx=2, pady=2)
     window_size_value.grid(row=12, column=1, padx=(0, 20), pady=2, sticky="ew")
 
-    Label_STD_difference.grid(row=13, column=0, padx=2, pady=2)
-    STD_difference_value.grid(row=13, column=1, padx=(0, 20), pady=2, sticky="ew")
+    Label_STD_difference.grid(row=14, column=0, padx=2, pady=2)
+    STD_difference_value.grid(row=14, column=1, padx=(0, 20), pady=2, sticky="ew")
 
     """ Output settings """
     check_box_smooth_data = tk.IntVar(value=1)
@@ -2341,8 +2361,6 @@ if __name__ == '__main__':
 
     # --- Advanced Options ---
 
-
-
     """check_multi_TOMATO = tk.Checkbutton(
         TOMATO_panel,
         text="MultiH5",
@@ -2388,45 +2406,52 @@ if __name__ == '__main__':
     )
     check_pre_TOMATO.grid(row=6, column=4, columnspan=2, sticky='W', padx=5, pady=1)
 
+    check_antialiasing_TOMATO = tk.Checkbutton(
+        TOMATO_panel,
+        text="Anti-Aliasing",
+        variable=check_box_antialiasing
+    )
+    check_antialiasing_TOMATO.grid(row=7, column=4, columnspan=2, sticky='W', padx=5, pady=1)
+
     # --- Preprocessing Parameters (shared with Tab 1) ---
     lbl_preprocessing = tk.Label(TOMATO_panel, text='PARAMETERS', font='Helvetica 8 bold')
-    lbl_preprocessing.grid(row=14, column=0, columnspan=3, pady=(10, 0), sticky='w')
+    lbl_preprocessing.grid(row=8, column=0, columnspan=3, pady=(5, 0), sticky='w')
 
     # Downsampling rate
     lbl_ds_TOMATO = tk.Label(TOMATO_panel, text='Downsampling rate')
-    lbl_ds_TOMATO.grid(row=15, column=0, sticky='e', padx=5, pady=2)
+    lbl_ds_TOMATO.grid(row=9, column=0, sticky='e', padx=5, pady=2)
     ent_ds_TOMATO = tk.Entry(TOMATO_panel, textvariable=downsample_value, width=10)
-    ent_ds_TOMATO.grid(row=15, column=1, padx=5, pady=2)
+    ent_ds_TOMATO.grid(row=9, column=1, padx=5, pady=2)
 
     # Filter degree (label changes based on SavGol selection)
     lbl_filt_deg_TOMATO = tk.Label(TOMATO_panel, text='Filter degree')
-    lbl_filt_deg_TOMATO.grid(row=16, column=0, sticky='e', padx=5, pady=2)
+    lbl_filt_deg_TOMATO.grid(row=10, column=0, sticky='e', padx=5, pady=2)
     ent_filt_deg_TOMATO = tk.Entry(TOMATO_panel, textvariable=Filter_degree, width=10)
-    ent_filt_deg_TOMATO.grid(row=16, column=1, padx=5, pady=2)
+    ent_filt_deg_TOMATO.grid(row=10, column=1, padx=5, pady=2)
 
     # Cut-off frequency / Window length
     lbl_cutoff_TOMATO = tk.Label(TOMATO_panel, text='Cut-off frequency')
-    lbl_cutoff_TOMATO.grid(row=17, column=0, sticky='e', padx=5, pady=2)
+    lbl_cutoff_TOMATO.grid(row=11, column=0, sticky='e', padx=5, pady=2)
     ent_cutoff_TOMATO = tk.Entry(TOMATO_panel, textvariable=Filter_cut_off, width=10)
-    ent_cutoff_TOMATO.grid(row=17, column=1, padx=5, pady=2)
+    ent_cutoff_TOMATO.grid(row=11, column=1, padx=5, pady=2)
 
     # Force threshold
     lbl_fmin_TOMATO = tk.Label(TOMATO_panel, text='Force threshold (pN)')
-    lbl_fmin_TOMATO.grid(row=18, column=0, sticky='e', padx=5, pady=2)
+    lbl_fmin_TOMATO.grid(row=12, column=0, sticky='e', padx=5, pady=2)
     ent_fmin_TOMATO = tk.Entry(TOMATO_panel, textvariable=Force_Min, width=10)
-    ent_fmin_TOMATO.grid(row=18, column=1, padx=5, pady=2)
+    ent_fmin_TOMATO.grid(row=12, column=1, padx=5, pady=2)
 
     # Z-score force
     lbl_zf_TOMATO = tk.Label(TOMATO_panel, text='Z-score force')
-    lbl_zf_TOMATO.grid(row=19, column=0, sticky='e', padx=5, pady=2)
+    lbl_zf_TOMATO.grid(row=9, column=2, sticky='e', padx=5, pady=2)
     ent_zf_TOMATO = tk.Entry(TOMATO_panel, textvariable=Z_score_force, width=10)
-    ent_zf_TOMATO.grid(row=19, column=1, padx=5, pady=2)
+    ent_zf_TOMATO.grid(row=9, column=3, padx=5, pady=2)
 
     # Z-score distance
     lbl_zd_TOMATO = tk.Label(TOMATO_panel, text='Z-score distance')
-    lbl_zd_TOMATO.grid(row=20, column=0, sticky='e', padx=5, pady=2)
+    lbl_zd_TOMATO.grid(row=10, column=2, sticky='e', padx=5, pady=2)
     ent_zd_TOMATO = tk.Entry(TOMATO_panel, textvariable=Z_score_distance, width=10)
-    ent_zd_TOMATO.grid(row=20, column=1, padx=5, pady=2)
+    ent_zd_TOMATO.grid(row=10, column=3, padx=5, pady=2)
 
     # ===============================================
 
