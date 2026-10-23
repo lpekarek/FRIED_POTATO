@@ -637,7 +637,17 @@ def start_subprocess(analysis_folder, timestamp, Files, input_settings, input_fo
 
                             else:
                                 # unchanged
-                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(...)
+                                export_fit_ds, area_ds, step_start, main_ds_model = fitting_ds(
+                                    filename_i,
+                                    input_settings,
+                                    export_data,
+                                    input_fitting,
+                                    float(common_steps[0]['step start']),
+                                    Force_Distance_ds,
+                                    derivative_array,
+                                    F_low,
+                                    0
+                                )
 
                             export_fit.append(export_fit_ds)
 
