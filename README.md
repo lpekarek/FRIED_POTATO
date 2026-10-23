@@ -1,245 +1,228 @@
-Welcome to FRIED POTATO - Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol 
+# FRIED POTATO
+**Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol**
 
-FRIED POTATO is an extension of the original [POTATO](https://github.com/REMI-HIRI/POTATO). 
+**Version:** 3.1 (2026-10-23)
 
-FRIED POTATO includes some improvements in the way results are exported as well as includes some additional paramateres such as change in contour lenght upon each step and total contour lenght of each curve.
+**Developers:** Lukáš Pekárek & Stefan Buck & Simon Doll & Leo König 
 
-Another new feature is the option to use "Reverse fitting" during the analysis which is suitable for long RNA analysis, under the condition that the full unfolding of RNA has been reached.
+**Copyright:** © 2026 Lukáš Pekárek & Stefan Buck & Simon Doll
+
+---
+
+## 📖 Overview
+
+FRIED POTATO is an automated Python-based GUI tool for processing Force-Distance
+(FD) data from optical tweezers experiments. It detects unfolding events, fits
+polymer models (WLC/FJC) to the curve sections, and calculates the mechanical
+work applied to the studied structure (e.g., RNA).
 
 ![FRIED POTATO](https://github.com/lpekarek/FRIED_POTATO/assets/59534208/05407fc0-f169-4a62-b842-3ba7ccd2fcfe)
 
+It extends the original [POTATO](https://github.com/REMI-HIRI/POTATO) tool with
+improved exports, additional analysis modes, and robustness enhancements.
 
-***Description***
+For the full method description of the original tool, refer to the POTATO
+manuscript: doi: [10.1101/2021.11.11.468103](https://doi.org/10.1101/2021.11.11.468103)
 
-This script processes Force-Distance Optical Tweezers data in an automated way, to find unfolding events, 
+---
 
-perform fitting of polymer models and calculate the work applied onto the structure.
+## ✨ What's New in FRIED POTATO (vs. original POTATO)
 
-The script is developed to handle h5 raw data, produced by the C-Trap OT instrument from LUMICKS,
+1. **Extended export columns** — change in contour length per step (`delta Lc`),
+   total contour length (`total Lc`), total work (`total W`) and step counts are
+   written to the cumulative `total_results_<timestamp>.csv` file.
+2. **Reverse Fitting mode** — suitable for long RNA analysis when full unfolding
+   has been reached; fits the fully unfolded region first and propagates the
+   ds-parameters into the ss-region fits (works in both batch and TOMATO modes).
+3. **Savitzky-Golay filtering** — optional alternative to the Butterworth filter;
+   labels and parameters switch automatically between polynomial order /
+   window length and filter degree / cut-off frequency.
+4. **Trap Position-based curve splitting (MultiH5)** — when `Trap position/1X`
+   data is present in an h5 file, forward/reverse curves are split using trap
+   movement rather than bead distance, avoiding misclassification caused by
+   unfolding steps. Falls back to distance automatically for older files.
+5. **SVG export** — all figures (batch analysis plots, constant-force plots and
+   fitted histograms) can additionally be exported as vector graphics.
+6. **Robustness improvements** — automated error logging
+   (`error_log_<timestamp>.txt` in the analysis folder), empty/short-array
+   validation before orientation checks and derivatives, per-file crash recovery
+   (failed fits are recorded as `NaN` rows with a `fit_status` message instead of
+   aborting the run), and explicit memory cleanup between files.
+7. **Descriptive analysis folder names** — output folders are named with a short
+   parameter code, e.g. `Analysis_M0_DER_DS10_BW_FD3_CO1e+04_FM5_ZF2_ZD2_...`,
+   encoding input format, step-detection mode, downsampling, filter settings,
+   force threshold and z-scores used.
+8. **TOMATO total-results export** — the manual TOMATO analysis now writes a
+   batch-compatible cumulative `total_results_<timestamp>.csv` plus a per-curve
+   `<filename>_fit_data_<timestamp>.csv` containing the model curves.
+9. **Parameter load/save** — parameter sets saved as text files (JSON sections)
+   can be reloaded via *File → Load Parameters*, restoring all preprocessing,
+   fitting and input-format settings.
 
-as well as any other FD data prepared in a CSV file (2 columns: Force(pN) - Distance(um or nm))
+---
 
-Furthermore the script can analyse single constant force markers.
+## 🛠️ Dependencies
 
-The parameters can be changed in the GUI before each run.
+**Python 3** with the following packages:
+`csv`, `glob`, `h5py`, `json`, `lumicks.pylake`, `matplotlib`, `multiprocessing`,
+`numpy`, `os`, `pandas`, `pathlib`, `PIL`, `scipy`, `statistics`, `time`, `tkinter`
 
-Alternatively they can be changed permanently in the FRIED_POTATO_config file.
+A conda environment file (`environment.yml`) with pinned package versions is
+provided. A standalone Windows executable is also available to avoid any
+environment setup.
 
-To avoid issues with different python package versions, or to avoid setting up an appropriate environment, an executable FRIED POTATO version is available. 
+**Launch (source version):**
+```bash
+python FRIED_POTATO_GUI.py
+```
 
-For more detailed description please refer to the manuscript describing the original POTATO: 
-doi: https://doi.org/10.1101/2021.11.11.468103
+---
 
+## 📂 Input Formats
 
-***Dependencies***
-Yaml file allowing to create the working python (conda) environment with correct package versions is provided.
-Python3
-Packages:
-  csv,
-  glob,
-  h5py,
-  json,
-  lumicks.pylake,
-  matplotlib,
-  multiprocessing,
-  numpy,
-  os,
-  pandas,
-  pathlib,
-  PIL,
-  scipy,
-  statistics,
-  time,
-  tkinter
+| Format | Source | Frequency |
+|---|---|---|
+| **High Frequency (Piezo Distance)** | `.h5` (LUMICKS C-Trap, piezo tracking) | Read from the h5 file |
+| **Low Frequency** | `.h5` (LUMICKS C-Trap) | Calculated from start/stop timestamps in the file |
+| **CSV (F/D)** | Two columns, no headers: Force (pN), Distance (µm or nm) | Entered by the user |
 
-There is also a standalone executable FRIED POTATO version for Windows available.
+Notes:
+- CSV data can be forward (unfolding) or reverse (folding) curves. For the script
+  to distinguish them, reverse curves must **start with the highest distance**.
+- Force channel (Trap 1x / 2x) and distance unit (µm / nm) are selectable in the GUI.
+- **ATTENTION:** Switching input format resets all parameters to that format's defaults.
 
+---
 
-***Navigation***
+## 🖥️ GUI Tabs
 
-The FRIED POTATO GUI is structured in five tabs: "Folder Analysis", "Show Single File", "Constant Force Analysis", "Advanced Settings"and "TOMATO - Manual analysis".
-For each analysis step, buttons are displayed in the different tabs and some of them can also be found in the drop-down menu.
+### 1. Folder Analysis
+Automated batch analysis of all files in a selected folder.
 
-***Folder Analysis***
+- Select the input format, adjust parameters, then press
+  **"Select Folder to Analyse!"** (or *File → Analyse folder*).
+- Each curve's orientation is detected automatically; reverse curves are flipped
+  internally and labelled `orientation = reverse` in the outputs.
+- With **MultiH5** enabled, multi-pull h5 files are split into individual
+  forward/reverse curves (named `..._fw_curveN` / `..._rv_curveN`), optionally
+  using Trap Position data.
+- Optional **Min step length** mode replaces the classic z-score/derivative
+  step detection with contour-length-based step filtering.
+- Optional **Data Augmentation** duplicates/jitters data to stabilise fits.
 
-![Tab1_new](https://user-images.githubusercontent.com/77443646/173436207-22c95571-02ff-41bd-a85a-487b9c9b8078.PNG)
+**Outputs** (in `Analysis[_RF]_<parameter-code>_<timestamp>/`):
+- `*_smooth_*.csv` — down-sampled, filtered FD data
+- PNG (+ optional SVG) plots of the FD curve, derivatives and marked steps
+- `*_results_*.csv` — steps found per file (force derivative, distance
+  derivative, and common steps)
+- Fitting plots and parameter tables per curve
+- `total_results_<timestamp>.csv` — all steps from all files, combined with the
+  fit results (`model_type`, `log_likelihood`, ds/ss contour lengths,
+  persistence lengths, stiffnesses, offsets and their standard errors, work in
+  pN·nm and k<sub>B</sub>T, `delta Lc`, `total Lc`, `total W`, `fit_status`)
+- `parameters_<timestamp>.txt` — all settings used (re-loadable)
+- The **Refresh** button displays the latest generated plot and prints
+  progress messages in the output window.
 
-In this tab, all force ramp experimental files in the specified folder will be analyzed automatically.
+### 2. Show Single File
+Displays a single FD curve (h5-HF, h5-LF or CSV) twice: once raw/unfiltered and
+once down-sampled and filtered. Useful for verifying preprocessing settings and
+diagnosing data problems before running a batch analysis. *File → Show h5 file
+structure* prints the group/dataset layout of an h5 file to help locate data.
 
-**Input**
-
-FRIED POTATO supports three different input formats for folder analysis.
-The appropriate dataset has to be selected prior to the analysis.
-ATTENTION: When changing between input formats, all parameters are reset to the default values!
-
-1) High frequency (Piezo Distance):
-      Analyses the high frequency data (Piezo tracking) of all h5 files in a given directory.
-      The data gathering frequency is derived directly out of the h5 files.
-2) Low Frequency:
-      Analyses the low frequency data of all h5 files in a given directory.
-      The data gathering frequency is calculated directly out of the h5 files.
-3) CSV (F/D):
-      Analyses all csv files in a given directory.
-      The architecture of these files need to consist out of two columns (Force and Distance) without headers.
-      Force needs to be in pN. Distance can be either be in µm or nm.
-      The script can process forward (unfolding) as well as reverse (folding) curves. If the script should distinguish,
-      the reverse curves need to start with the highest distance and decrease from there.
-      The data gathering frequency and all other parameters are derived from the user input in the GUI.
-
-**Parameters**
-
-Parameters can be changed directly in the Graphical User Interface (GUI).
-For more setting options refer to the "Advanced Settings" tab, which includes all adjustable parameters.
-When the parameters are optimized, default parameters can be changed in the FRIED_POTATO_config file,
-so they will be loaded when the GUI is started.
-The parameters are read in once the analysis starts and for the force-ramp analysis the used parameters are exported in json format.
-
-**Output**
-  FRIED POTATO creates an "Analysis" folder with timestamp in the analysed directory.
-	The "Refresh" button loads the last saved image and displays the progress in the GUI.
-	In the "Advanced Settings" tab, several export settings can be set.
-
-1) Processed FD data:
-      Exports the down-sampled and filtered Force-Distance-Array in CSV format.
-      The exported filename consists of the original filename and additional suffix "_smooth".
-2) Plot:
-      Exports a figure (PNG) containing - the visualized processed data with and without marked unfolding events
-                                        - the corresponding force- and distance derivatives
-3) Steps found:
-      Exports the identified steps for each curve into a separate CSV file.
-      The step length does NOT correspond to the contour length change, but is only the distance difference between step start and step end.
-4) Fitting:
-      Exports a plot with the fitted models and a table of the fitting parameters for each section in CSV format.
-      When 'Fitting' is not selected, the script skips all fitting steps and therefore the analysis is much faster.
-4) Total results:
-      Exports all found steps for all analysed files to a single CSV file.
-
-
-***Show Single File***
-  
 ![Tab2_new](https://user-images.githubusercontent.com/77443646/173436271-b313fdc2-908f-47fb-bae0-527c56b25a2f.PNG)
 
-**Input**
-  
-Single FD-curves of all three input formats (h5-HF, h5-LF, CSV) can be displayed.
+### 3. Constant Force Analysis
+Analysis of constant-force markers.
 
-**Output**
-
-A FD-curve of the original input values, as well as the down sampled values are plotted in the GUI. This may help identify potential causes of errors.
-
-
-***Constant Force Analysis***
   
 ![Tab3_new](https://user-images.githubusercontent.com/77443646/173436319-698ef81b-68c2-4957-8cc7-579660421fb6.PNG)
 
-  
-**Input**
-  
-First the constant force marker should be displayed in a time-distance plot with adjacent histogram (Button -> Display Constant Force Data).
-All three input formats (h5-HF, h5-LF, CSV) are supported.
-After providing an initial guess of the fitting parameters, the histogram of the same file can be fitted with gaussians (Button -> Fit Constant Force Data).
+1. **Display Constant Force Data** — time-distance plot with an adjacent
+   distance histogram.
+2. Enter the number of expected Gaussians plus initial guesses for mean, SD and
+   amplitude (comma-separated, lowest to highest).
+3. **Fit Constant Force Data** — the histogram is fitted with a sum of Gaussians;
+   per-peak areas and population fractions are computed.
 
-**Parameters**
-  
-The down sample and filtering parameters are applied also onto the constant force data.
-This can have a huge impact on the displayed plot.
-Furthermore, the axes have to be set manually and the fitting parameters have to be guessed (dependent on the # of expected gaussians).
-To guess the fitting parameters, they are entered from lowest to highest values, separated with a comma.
+**Outputs** (in `Analysis_constantF_<file>_<timestamp>/`): the time-distance
+figure, the fitted histogram figure (PNG **and** SVG), the smoothed data, the
+histogram distribution, and a parameter table (mean, sigma, amplitude, area,
+fraction), each as CSV.
 
-**Output**
-  
-FRIED POTATO creates an "Analysis_constantF" folder with timestamp in the analysed directory.
-Both, the time-distance plot and the fitted histogram are exported as separate figures in PNG format.
-In addition, the smoothened values as well as the histogram distribution are exported into CSV files.
-Last, a table with values of the fitted parameters is exported in CSV format.
+### 4. Advanced Settings
+All adjustable parameters, grouped by analysis stage:
 
-
-***Advanced Settings***
   
 ![Tab4_new](https://user-images.githubusercontent.com/77443646/173436359-56f1a257-432f-4d47-826e-6b4efc288e10.PNG)
 
-This tab contains all the adjustable parameters in the FRIED POTATO.
-The parameters are divided into several groups based on the part of analysis, in which they are used.
-  
 **Preprocessing**
-  
-Downsample rate - Only every nth value is taken for analysis; speeds up subsequent processing.
-  
-Butterworth Filter degree - Defines the stringency of the filter.
-  
-Cut off frequency  - Signals with a frequency above this threshold are suppressed.
- 
-Force threshold, pN - Values with lower force are excluded from the analysis.
-  
+- Downsampling rate
+- Filter type (Butterworth or Savitzky-Golay), filter degree / polynomial order
+- Cut-off frequency / SG window length
+- Force threshold (pN)
+
 **Derivative**
-  
-Step d - Characterizes the interval between two values used for numerical derivative calculation.
-  
-Data frequency, Hz - The frequency at which data is recorded.
-  
+- Step *d* — interval used for numerical derivatives
+- Data frequency (Hz)
+
 **Statistics**
-  
-z-score force/distance - The number of standard deviations used to determine whether a given value is part of a normal distribution.
-  
-moving median window size - The number of values considered for each median calculation. Can be set independently for force and distance
-  
-SD difference threshold - Statistical analysis and data sorting are iterated until the difference between two consecutive SDs is below this value.
-  
+- Z-scores (force / distance)
+- Moving median window size
+- SD difference threshold (iteration stopping criterion)
+
 **Fitting**
-  
-"WLC+WLC" or "WLC+FJC" tick option - determines whether the unfolded regions of FD curves will be fitted with model combining two WLC models or WLC and FJC models, repectively.
-  
-dsLp, nm - Persistence length of the double-stranded (folded) part of the tethered construct.
-
-dsLc, nm - Contour length of double-stranded (folded) part of the tethered construct.
-
-dsK0, pN - Stretch modulus of double-stranded (folded) part of the tethered construct.
-
-Force_offset, pN - Force offset of a given dataset; compensates for a shift in the dataset.
-
-Distance_offset, nm - Distance offset of a given dataset; compensates for a shift in the dataset.
-
-ssLp, nm - Persistence length of the single-stranded (unfolded) part of the tethered construct.
-
-ssLc, nm - Contour length of single-stranded (unfolded) part of the tethered construct.
-
-ssK0, pN - Stretch modulus of single-stranded (unfolded) part of the tethered construct.
+- Model choice: `WLC+WLC` or `WLC+FJC`
+- ds/ss persistence lengths (ds/ss *L*<sub>p</sub>), contour lengths (*L*<sub>c</sub>),
+  stretch moduli (*K*<sub>0</sub>) — each with upper/lower bounds
+- Force and distance offsets, with bounds
 
 **Export**
-  
-Consists of tick options for marking the data files to be exported (ticked) or not (unticked) during the analysis.
+Toggles for: Processed FD data · Plot (PNG/SVG) · Steps found · Total results ·
+Fitting. Unticking *Fitting* skips all fitting steps and greatly accelerates the
+run.
 
-Processed FD data 	- Exports the down-sampled and filtered Force-Distance-Array in CSV format.The exported filename consists of the original filename and additional suffix "_smooth".
+### 5. TOMATO — Manual Analysis
+Interactive step-picking for difficult curves, using the same preprocessing and
+fitting settings as the batch analysis.
 
-Plot			- Exports a figure (PNG) containing - the visualized processed data with and without marked unfolding events
-                                                - the corresponding force- and distance derivatives
-
-Steps found 		- Exports the identified steps for each curve into a separate CSV file.
-              The step length does NOT correspond to the contour length change, but is only the distance difference between step start and step end.
-
-Total results 		- Exports all steps from both derivatives in CSV format.
-
-Fitting 		- Exports a plot with the fitted models and a table of the fitting parameters for each section in CSV format.
-              When 'Fitting' is not selected, the script skips all fitting steps and therefore the analysis is much faster.
-
-  
-  
-  
-***TOMATO - manual analysis***
-  
 ![Tab5_new](https://user-images.githubusercontent.com/77443646/173436395-dca85422-a263-4aed-b87b-f18f7eec3aaf.PNG)
 
-This tab allows user to perform manual analysis of the FD curves. FRIED TOMATO uses the same input parameters as FRIED POTATO.
-1) Choose the folder containing the curves to analyse with the "Choose folder" button. Attention the file format and preprocessing values are set in the "Analysis folder" tab.
-	
-2) Manually mark the start and end of each (un)folding step: 
-	- press "s" or click on "Set start" button --> click on the position of start of a step
-	- press "e" or click on "Set end" button --> click on the position of end of the same step
-	- press "ctrl+s" or click on "Save step" button to save marked step coordinates
-	repeat until all steps are marked. Attention, the steps have to be marked in the correct order from the "lowest" to the "highest" step.
-	- if a mistake occurs during the marking, the last saved value can be removed by the "Delete step" button.
-3) Click on "Analyze curve" 
-	TOMATO proceeds with step coordinates input and performes the rest analysis as done by POTATO (fitting + work calculations). This may take some time during which the GUI is unresponsive. Optimize fitting parameters until a good fit is obtained. Entries of bad fits can be deleted in the "results table" by selecting them and pressing "Delete"
-	The relevant parameters are loaded into the table below the figure. The column width can be adjusted to see the parameter labels.
-4) Switch to the next curve of the folder with the arrow keys (left, right) or press "a" or "d". The "step table" will be reseted. Analysis is performed as explained above and the parameters are added to the "results table". 
-5) When all curves are manually analysed, the results table can be saved as csv file with the "Save results table" button.
+- **Choose folder**, then mark each (un)folding step in order from lowest to
+  highest: `s` (or *Set start*) + click · `e` (or *Set end*) + click ·
+  `Ctrl+S` (or *Save step*). The last saved step can be removed with
+  *Delete step*.
+- **Analyze curve** (`Ctrl+F`) performs fitting and work calculations on the
+  marked regions — the GUI is unresponsive during this, please be patient.
+  Bad fits can be removed from the results table (select row + `Del`).
+- Navigate between curves with **←/→** or `a`/`d` (step table resets each time).
+- **Save results table** exports the full results table as CSV.
+- Per curve, the fitted model curves are exported to
+  `<filename>_fit_data_<timestamp>.csv`, and each analysed curve is appended to a
+  batch-compatible `total_results_<timestamp>.csv` with the same columns as the
+  folder analysis.
+- Reverse Fitting is also available in TOMATO via the same tick-box.
+
+---
+
+## ⚠️ Troubleshooting
+
+- **"No file of the selected data type in the folder!"** — check that the folder
+  contains `.h5` or `.csv` files matching the selected input format (HF/LF/CSV).
+- **Curves below the force threshold are skipped** — check that the correct trap
+  (1x/2x) and units (µm/nm) are selected.
+- **Crashes / failed fits** — consult `error_log_<timestamp>.txt` inside the
+  analysis folder; failed individual fits are logged in the total-results CSV
+  with a `fit_status` message instead of stopping the analysis.
+
+---
+
+## 📚 References
+
+- Original POTATO manuscript:
+  doi:[10.1101/2021.11.11.468103](https://doi.org/10.1101/2021.11.11.468103)
+- LUMICKS C-Trap: https://www.lumicks.com
+
+---
+
+FRIED POTATO — *may your unfoldings be crisp.*
