@@ -1,16 +1,10 @@
-"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
+"""Copyright 2026 Lukáš Pekárek & Stefan Buck & Simon Doll & Leo König"""
 
-""" FRIED POTATO -- 2024-10-18 -- Version 1.0
-    Developed by Lukáš Pekárek (LP) and Stefan Buck (SB)
-    Based on the original POTATO developed by LP and SB at the Helmholtz Institute for RNA-based Infection Research
-    In the research group REMI - Recoding Mechanisms in Infections
-    Supervisor - Jun. Prof. Neva Caliskan """
-""" This script processes Force-Distance Optical Tweezers data in an automated way, to find unfolding events """
-""" The script is developed to handle h5 raw data, produced from the C-Trap OT machine from Lumicks,
-    as well as any other FD data prepared in a csv file (2 columns: Force(pN) - Distance(um)) """
-""" Furthermore the script can analyse single constant force files """
+""" FRIED POTATO -- 2026-10-23 -- Version 3.1
+    Developed by Lukáš Pekárek (LP), Stefan Buck (SB), Simon Doll (SD) and Leo König (LK)"""
+
 """ The parameters can be changed in the GUI before each run.
-    Alternatively they can be changed permanently in the POTATO_config file"""
+    Alternatively the default parameter values can be changed permanently in the POTATO_config file"""
 
 import tkinter as tk
 import traceback

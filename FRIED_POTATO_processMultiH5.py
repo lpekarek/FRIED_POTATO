@@ -1,4 +1,4 @@
-"""Copyright 2024 Lukáš Pekárek & Stefan Buck"""
+"""Copyright 2026 Lukáš Pekárek & Stefan Buck & Simon Doll & Leo König"""
 
 import pandas as pd
 import numpy as np
