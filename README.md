@@ -2,7 +2,9 @@
 **Force-Ramp Improved EDition of Practical Optical Tweezers Analysis TOol**
 
 **Version:** 3.1 (2026-10-23)
+
 **Developers:** Lukáš Pekárek & Stefan Buck & Simon Doll & Leo König 
+
 **Copyright:** © 2026 Lukáš Pekárek & Stefan Buck & Simon Doll
 
 ---
