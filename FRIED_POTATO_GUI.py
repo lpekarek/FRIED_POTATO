@@ -20,6 +20,7 @@ import glob
 import time
 import multiprocessing as mp
 import json
+import pickle
 
 # relative imports
 from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data,read_in_data_TOMATO, show_h5_structure
@@ -667,15 +668,26 @@ def attach_responsive_canvas(canvas_agg, fig):
     tk_widget.config(width=100, height=80)
 
     def apply_size(w, h):
+        # reserve vertical space for the toolbar, if one is attached below the plot
+        tb = globals().get('TOMATO_toolbar', None)
+        if tb is not None:
+            try:
+                h -= tb.winfo_reqheight()
+            except Exception:
+                pass
         if w > 10 and h > 10:
             tk_widget.config(width=w, height=h)
             fig.set_size_inches(w / fig.dpi, h / fig.dpi)
             canvas_agg.draw()
 
-    def on_frame_configure(event):
-        apply_size(event.width, event.height)
+    #'''    def on_frame_configure(event):
+    #    apply_size(event.width, event.height)'''
 
-    # Catch all future resizes
+    # Catch all future resizes, but only resize when the user is not interacting
+    def on_frame_configure(event):
+        if not getattr(canvas_agg, '_toolbar_active', False):
+            apply_size(event.width, event.height)
+
     parent_frame.bind('<Configure>', on_frame_configure)
 
     # --- NEW: catch the CURRENT size at creation time ---
@@ -738,7 +750,14 @@ def open_folder():
     
     # Toolbar removed from inside TOMATO_figure_frame (was causing geometry conflict)
     # If needed, toolbar can be added to tab5 directly instead
-
+    # --- NEW: zoom/pan toolbar (gridded below the plot; no pack/grid conflict) ---
+    try:
+        TOMATO_toolbar.destroy()
+    except Exception:
+        pass
+    TOMATO_toolbar = NavigationToolbar2Tk(TOMATO_fig1, TOMATO_figure_frame, pack_toolbar=False)
+    TOMATO_toolbar.grid(row=1, column=0, sticky="ew")
+    TOMATO_toolbar.update()
 
 def change_FD(direction):
     global TOMATO_fig1
@@ -776,7 +795,14 @@ def change_FD(direction):
     TOMATO_fig1 = FigureCanvasTkAgg(fig, TOMATO_figure_frame)
     TOMATO_fig1.get_tk_widget().grid(row=0, column=0, sticky="nsew")
     attach_responsive_canvas(TOMATO_fig1, fig)
-
+    # --- NEW: zoom/pan toolbar (gridded below the plot; no pack/grid conflict) ---
+    try:
+        TOMATO_toolbar.destroy()
+    except Exception:
+        pass
+    TOMATO_toolbar = NavigationToolbar2Tk(TOMATO_fig1, TOMATO_figure_frame, pack_toolbar=False)
+    TOMATO_toolbar.grid(row=1, column=0, sticky="ew")
+    TOMATO_toolbar.update()
 
 # key binding wrapper functions
 def previous_FD_key(event):
@@ -1359,9 +1385,43 @@ def analyze_steps():
     subplot1.set_xlim([min(Force_Distance_TOMATO[:, 1]) - 10, max(Force_Distance_TOMATO[:, 1]) + 10])
     subplot1.tick_params('both', direction='in')
 
+
+    # --- NEW: export fit figure (png/svg) and pickle of fit objects ---
+    
+    fig_filename_png = f"{filename_TOMATO}_fit_{timestamp}.png"
+    fig_path_png = os.path.join(folder, fig_filename_png)
+    figure1.savefig(fig_path_png, dpi=300)
+    print(f"Fit figure saved to {fig_filename_png}")
+    # SVG if the SVG option is ticked in the export settings
+    if export_data.get('export_svg', True) == 1:
+        fig_filename_svg = f"{filename_TOMATO}_fit_{timestamp}.svg"
+        fig_path_svg = os.path.join(folder, fig_filename_svg)
+        figure1.savefig(fig_path_svg, dpi=300)
+        print(f"Fit figure saved to {fig_filename_svg}")
+
+    pickle_filename = f"{filename_TOMATO}_fit_objects_{timestamp}.pickle"
+    pickle_path = os.path.join(folder, pickle_filename)
+    with open(pickle_path, 'wb') as f:
+        pickle.dump({
+            'fit_objects': fit,      # pylake FdFit objects (one per region)
+            'fit_dicts': export_fit,  # the parameter dicts shown in the results table
+            'filename': filename_TOMATO,
+            'steps': treeview_df      # the manually marked steps
+        }, f)
+    print(f"Fit objects pickled to {pickle_filename}")
+
+
     TOMATO_fig1 = FigureCanvasTkAgg(figure1, TOMATO_figure_frame)
     TOMATO_fig1.get_tk_widget().grid(row=0, column=0, sticky="nsew")
     attach_responsive_canvas(TOMATO_fig1, figure1)
+        # --- NEW: zoom/pan toolbar (gridded below the plot; no pack/grid conflict) ---
+    try:
+        TOMATO_toolbar.destroy()
+    except Exception:
+        pass
+    TOMATO_toolbar = NavigationToolbar2Tk(TOMATO_fig1, TOMATO_figure_frame, pack_toolbar=False)
+    TOMATO_toolbar.grid(row=1, column=0, sticky="ew")
+    TOMATO_toolbar.update()
 
 
 def delete_step():
