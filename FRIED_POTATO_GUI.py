@@ -21,6 +21,9 @@ import time
 import multiprocessing as mp
 import json
 import pickle
+from pathlib import Path
+
+
 
 # relative imports
 from FRIED_POTATO_ForceRamp import start_subprocess, read_in_data,read_in_data_TOMATO, show_h5_structure
@@ -773,6 +776,10 @@ def change_FD(direction):
         FD_number = FD_number + len(Files)
 
     delete_all_steps()
+
+    # --- NEW: restore previously saved marks for this curve, if any ---
+    rec = marked_steps_store.get(filename_TOMATO)  # note: check BEFORE entryText is reset
+
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data_TOMATO(FD_number, Files, input_settings, input_format)
 
@@ -786,6 +793,14 @@ def change_FD(direction):
         orientation = 'reverse'
 
     entryText_filename.set(filename_TOMATO)
+
+    # --- NEW: restore previously saved marks for this curve, if any ---
+    rec = marked_steps_store.get(filename_TOMATO)
+    if rec is not None:
+        for vals in rec['rows']:
+            tree_steps.insert('', 'end', values=tuple(vals))
+        step_number = len(rec['rows']) + 1
+        print(f'Restored {len(rec["rows"])} saved steps for {filename_TOMATO}.')
 
     parameters(0, default_values_FIT, default_values_constantF)
 
@@ -852,7 +867,66 @@ def onclick_start_end(event, pos):
         entryText_endD.set(round(PD_position, 1))
     TOMATO_fig1.mpl_disconnect(cid)
 
+def analyze_all_marked():
+    """Re-loads every curve with saved marks and runs the (unchanged) fitting
+    routine on it, one after another. Hands-on marking and fitting are thereby
+    fully separated."""
+    global Force_Distance_TOMATO, der_arr_TOMATO, filename_TOMATO
+    global orientation
 
+    if not marked_steps_store:
+        print('No marked curves saved yet - use "Save steps for this curve" first.')
+        return
+
+    # auto-include unsaved steps of the currently displayed curve
+    if tree_steps.get_children() and entryText_filename.get() not in marked_steps_store:
+        save_current_marks()
+
+    input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
+
+    # process curves in folder order
+    entries = sorted(marked_steps_store.items(), key=lambda kv: kv[1]['index'])
+
+    output_window.insert('end', f'Starting TOMATO batch fitting of {len(entries)} curve(s)... \n')
+    output_window.see('end')
+
+    for fname, rec in entries:
+        try:
+            output_window.insert('end', f'Fitting: {fname} \n')
+            output_window.see('end')
+            root.update_idletasks()   # keep the window responsive-ish
+
+            # --- load the curve exactly like change_FD() does ---
+            Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, \
+                filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data_TOMATO(
+                    rec['index'], Files, input_settings, input_format)
+
+            der_arr_TOMATO = create_derivative(
+                input_settings, Frequency_value,
+                Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
+
+            orientation = 'forward'
+            if len(Force_Distance_TOMATO) >= 2 and \
+                    Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:
+                Force_Distance_TOMATO = np.flipud(Force_Distance_TOMATO)
+                orientation = 'reverse'
+
+            entryText_filename.set(filename_TOMATO)
+
+            # --- put this curve's marks into the tree and run the standard fit ---
+            delete_all_steps()
+            for vals in rec['rows']:
+                tree_steps.insert('', 'end', values=tuple(vals))
+
+            analyze_steps()   # existing routine, incl. optional sorting
+
+        except Exception as e:
+            output_window.insert('end', f'ERROR while fitting {fname}: {e} \n')
+            output_window.see('end')
+            log_error(f'Batch TOMATO fitting of {fname} failed:\n{traceback.format_exc()}')
+
+    output_window.insert('end', 'TOMATO batch fitting finished. \n')
+    output_window.see('end')
 def save_step():
     global step_number
     try:
@@ -900,6 +974,126 @@ TOMATO_TOTAL_HEADER = [
     'fit_status'
 ]
 
+# --- NEW: deferred batch marking for TOMATO ---
+# filename -> {'index': curve index in Files, 'rows': list of step tuples}
+marked_steps_store = {}
+marked_steps_csv = None
+MARKS_HEADER = ['filename', 'step number', 'F start', 'F end', 'step start', 'step end']
+
+def save_current_marks():
+    """Saves the steps currently in tree_steps for the loaded curve,
+    both in memory (marked_steps_store) and to a cumulative CSV in the folder."""
+    global marked_steps_store, marked_steps_csv
+
+    rows = [tree_steps.item(r)['values'] for r in tree_steps.get_children()]
+    if not rows:
+        print('No steps marked for this curve - nothing to save.')
+        return
+
+    fname = entryText_filename.get()
+    marked_steps_store[fname] = {'index': FD_number, 'rows': rows}
+
+    # rewrite the whole CSV from the store (few hundred rows at most)
+    if marked_steps_csv is None:
+        marked_steps_csv = os.path.join(
+            folder, 'marked_steps_' + time.strftime('%Y%m%d-%H%M%S') + '.csv'
+        )
+    out_df = []
+    for fn, rec in marked_steps_store.items():
+        for row in rec['rows']:
+            out_df.append([fn] + list(row))
+    out_df = pd.DataFrame(out_df, columns=MARKS_HEADER)
+    out_df.to_csv(marked_steps_csv, index=False)
+    print(f'Marks for "{fname}" saved ({len(rows)} steps). '
+          f'{len(marked_steps_store)} curve(s) marked so far.')
+
+def load_marks_file():
+    """Loads a previously saved marked_steps_*.csv and restores the marks
+    into marked_steps_store, so marking can resume or be re-analysed later.
+    Matches files by filename (basename without extension, case-insensitive)."""
+    global marked_steps_store
+    global marked_steps_csv
+
+    if 'Files' not in globals() or not Files:
+        print('Please open a data folder first (Open Folder) before loading marks!')
+        return
+
+    import_path = tk.filedialog.askopenfilename(
+        title='Select marked_steps CSV',
+        filetypes=[('CSV files', '*.csv'), ('All files', '*.*')]
+    )
+    if not import_path:
+        return
+
+    try:
+        marks_df = pd.read_csv(import_path)
+    except Exception as e:
+        print(f'Could not read marks file: {e}')
+        return
+
+    # validate header
+    missing = [c for c in MARKS_HEADER if c not in marks_df.columns]
+    if missing:
+        print(f'Marks file is missing expected columns: {missing}')
+        return
+
+    # map file basenames (without extension) -> index in Files, case-insensitive
+    def file_key(path):
+        stem = Path(path).name
+        for ext in ('.h5', '.csv'):
+            if stem.lower().endswith(ext.lower()):
+                stem = stem[:-len(ext)]
+                break
+        return stem.lower()
+
+    file_index = {file_key(p): idx for idx, p in enumerate(Files)}
+    # guard against duplicate basenames (last occurrence wins; warn)
+    duplicates = [k for k in file_index if sum(1 for p in Files if file_key(p) == k) > 1]
+    if duplicates:
+        print(f'WARNING: duplicate file basenames in folder: {duplicates}. '
+              f'The later file in the folder listing wins.')
+
+    loaded, unmatched = 0, []
+    marked_steps_store = {}   # start fresh; loading replaces the in-memory marks
+
+    for fname, group in marks_df.groupby('filename', sort=False):
+        key = str(fname).lower()
+        if key not in file_index:
+            unmatched.append(fname)
+            continue
+
+        # rebuild step rows; 'step number' is re-derived from row order so a
+        # partially hand-edited file still yields consecutive numbering
+        group = group.reset_index(drop=True)
+        rows = []
+        for n, (_, r) in enumerate(group.iterrows(), start=1):
+            rows.append((
+                n,
+                r['F start'], r['F end'],
+                r['step start'], r['step end']
+            ))
+
+        marked_steps_store[str(fname)] = {'index': file_index[key], 'rows': rows}
+        loaded += 1
+
+    # point the session CSV at the loaded file, so subsequent saves append into it
+    marked_steps_csv = import_path
+
+    print(f'Loaded marks for {loaded} curve(s) from {os.path.basename(import_path)}.')
+    if unmatched:
+        print(f'WARNING: {len(unmatched)} curve(s) in the marks file were NOT found '
+              f'in the currently open folder: {unmatched}')
+
+    # if the currently displayed curve has marks, show them in tree_steps
+    current = entryText_filename.get()
+    if current in marked_steps_store:
+        delete_all_steps()
+        for vals in marked_steps_store[current]['rows']:
+            tree_steps.insert('', 'end', values=tuple(vals))
+        global step_number
+        step_number = len(marked_steps_store[current]['rows']) + 1
+        print(f'Restored {len(marked_steps_store[current]["rows"])} steps '
+              f'for the displayed curve "{current}".')
 
 def init_tomato_total_results():
     """Creates the cumulative total-results CSV once per session,
@@ -1525,6 +1719,9 @@ def tab_bind(event=None):
         root.unbind("<Control-s>")
         root.unbind("<Control-f>")
         root.unbind("<Delete>")
+
+
+
 
 ############## TOMATO functions end ###################
 
@@ -2595,6 +2792,13 @@ if __name__ == '__main__':
     button_reset_parameters = tk.Button(TOMATO_button_frame, text='Reset parameters', command=lambda: parameters(0, default_values_FIT, default_values_constantF) if check_box_HF == 1 else (parameters(default_values_HF, default_values_FIT, default_values_constantF) if check_box_LF == 1 else parameters(default_values_CSV, default_values_FIT, default_values_constantF)), bg='palegreen2', font=('Arial', 11, 'bold'))
     button_reset_parameters.grid(row=1, column=1, padx=4, pady=4, sticky="ew")
 
+
+    button_load_marks = tk.Button(
+        TOMATO_button_frame, text='Load marks from file',
+        command=load_marks_file, height=1, padx=10, bg = "OliveDrab2",
+    ).grid(row=0, column=1, pady=5)
+
+
     label_info = tk.Label(TOMATO_button_frame, text='TOMATO is unresponsive during fitting, please be patient\nmark step start <s>   mark step end <e>\n save marked step <Ctrl+s>   start analysis <Ctrl+f>\n delete results line <mark+del>\n previous curve <Left arrow>   next curve <Right arrow>')
     label_info.grid(row=2, column=0, padx=4, pady=4)
 
@@ -2612,7 +2816,18 @@ if __name__ == '__main__':
     button_delete_step.grid(row=8, column=0, pady=2)
 
     button_start_analysis = tk.Button(TOMATO_parameter_frame, text='Analyze curve', command=analyze_steps, bg='#df4c4c', font=('Arial', 10, 'bold'))
-    button_start_analysis.grid(row=7, column=1, rowspan=2, pady=2, sticky="ew")
+    button_start_analysis.grid(row=7, column=2, pady=2)
+
+    button_save_marks = tk.Button(
+        TOMATO_parameter_frame, text='Save steps for this curve',
+        command=save_current_marks, bg='palegreen2', height=1, padx=10
+    ).grid(row=7, column=1, pady=5)
+
+    button_analyse_all = tk.Button(
+        TOMATO_parameter_frame, text='Analyse all marked curves',
+        command=analyze_all_marked, bg='#df4c4c', activebackground='#eaa90d', height=1, padx=10
+    ).grid(row=8, column=2, pady=5)
+
 
     ## show the fitting parameters in a table
     # create Treeview for results table
