@@ -818,6 +818,7 @@ def change_FD(direction):
     TOMATO_toolbar = NavigationToolbar2Tk(TOMATO_fig1, TOMATO_figure_frame, pack_toolbar=False)
     TOMATO_toolbar.grid(row=1, column=0, sticky="ew")
     TOMATO_toolbar.update()
+    redraw_step_markers() 
 
 # key binding wrapper functions
 def previous_FD_key(event):
@@ -927,13 +928,30 @@ def analyze_all_marked():
 
     output_window.insert('end', 'TOMATO batch fitting finished. \n')
     output_window.see('end')
+
+
 def save_step():
     global step_number
+    # 1) validate the click values BEFORE inserting (the only legitimate
+    #    reason for the classic message)
     try:
-        tree_steps.insert('', 'end', values=(step_number, entryText_startF.get(), entryText_endF.get(), entryText_startD.get(), entryText_endD.get()))
-        step_number += 1
-    except:
+        vals = (step_number,
+                float(entryText_startF.get()), float(entryText_endF.get()),
+                float(entryText_startD.get()), float(entryText_endD.get()))
+    except (TypeError, ValueError):
         print('Please make sure step start and step end are selected!')
+        return
+
+    # 2) insert into the table (bookkeeping can no longer be aborted by a plot error)
+    tree_steps.insert('', 'end', values=vals)
+    step_number += 1
+
+    # 3) draw markers; failure here is reported honestly, separately
+    try:
+        redraw_step_markers()
+    except Exception:
+        print('Step saved to table, but drawing the markers failed:')
+        traceback.print_exc()
 
 # --- NEW: cumulative total-results file for TOMATO, analogous to batch analysis ---
 tomato_total_results_file = None
@@ -1006,6 +1024,7 @@ def save_current_marks():
     out_df.to_csv(marked_steps_csv, index=False)
     print(f'Marks for "{fname}" saved ({len(rows)} steps). '
           f'{len(marked_steps_store)} curve(s) marked so far.')
+    redraw_step_markers() 
 
 def load_marks_file():
     """Loads a previously saved marked_steps_*.csv and restores the marks
@@ -1092,8 +1111,10 @@ def load_marks_file():
             tree_steps.insert('', 'end', values=tuple(vals))
         global step_number
         step_number = len(marked_steps_store[current]['rows']) + 1
+         
         print(f'Restored {len(marked_steps_store[current]["rows"])} steps '
               f'for the displayed curve "{current}".')
+    redraw_step_markers() 
 
 def init_tomato_total_results():
     """Creates the cumulative total-results CSV once per session,
@@ -1631,6 +1652,7 @@ def analyze_steps():
     TOMATO_toolbar = NavigationToolbar2Tk(TOMATO_fig1, TOMATO_figure_frame, pack_toolbar=False)
     TOMATO_toolbar.grid(row=1, column=0, sticky="ew")
     TOMATO_toolbar.update()
+    redraw_step_markers() 
 
 
 def delete_step():
@@ -1638,6 +1660,7 @@ def delete_step():
     list_items = tree_steps.get_children("")
     tree_steps.delete(list_items[-1])
     step_number -= 1
+    redraw_step_markers() 
 
 
 def delete_all_steps():
@@ -1645,6 +1668,7 @@ def delete_all_steps():
 
     tree_steps.delete(*tree_steps.get_children())
     step_number = 1
+    redraw_step_markers() 
 
 
 def delete_result(event):
@@ -1659,6 +1683,7 @@ def clear_table():
 
     for item in list_items:
         tree_results.delete(item)
+    redraw_step_markers() 
 
 
 def clear_table_last():
@@ -1666,6 +1691,7 @@ def clear_table_last():
     list_items = tree_results.get_children("")
 
     tree_results.delete(list_items[-1])
+    redraw_step_markers() 
 
 
 def export_table():
@@ -1721,7 +1747,95 @@ def tab_bind(event=None):
         root.unbind("<Delete>")
 
 
+# --- NEW: step markers drawn directly on the TOMATO curve ---
+# green circle = (Step start, F start), red circle = (Step end, F end)
 
+# artists of the currently drawn step markers; rebuilt on every redraw
+step_marker_artists = []
+
+
+def redraw_step_markers():
+    """Plots the steps currently marked in tree_steps onto the TOMATO curve:
+    a green circle at (Step start, F start) and a red circle at (Step end, F end).
+
+    Robust against figure rebuilds (open_folder / change_FD / analyze_steps all
+    destroy and recreate the canvas): stale artists from a destroyed figure are
+    simply skipped, and each marker is removed from the axes it actually lives
+    on, so it never matters which add_subplot() ran last.
+    """
+    global step_marker_artists
+
+    # ---- 1) get the axes that holds the raw FD curve ----------------------
+    try:
+        all_axes = TOMATO_fig1.figure.axes
+    except (AttributeError, KeyError, RuntimeError):
+        return  # no TOMATO figure exists (yet)
+    if not all_axes:
+        return
+
+    # Prefer the axes that carries the most lines (the raw-curve axes).
+    # After analyze_steps() the fit curves live on a second axes; the raw
+    # gray curve (drawn by plot_TOMATO) is on the axes with the most points.
+    ax = max(all_axes, key=lambda a: len(getattr(a, 'lines', [])))
+
+    # ---- 2) wipe previously drawn markers ----------------------------------
+    # Each Line2D knows the axes it belongs to (artist.axes), so removal is
+    # done on the correct axes no matter what; artists whose figure was
+    # already destroyed raise/miss and are quietly dropped.
+    for artist in step_marker_artists:
+        try:
+            if getattr(artist, 'axes', None) is not None:
+                artist.axes.lines.remove(artist)
+                # also detach from the figure so a stale axes remnant
+                # can't keep a hidden reference alive
+                artist.remove()
+        except (ValueError, AttributeError, RuntimeError):
+            pass  # already gone (figure/axes destroyed or already removed)
+    step_marker_artists = []
+
+    # ---- 3) exit early if there is nothing (left) to draw -----------------
+    rows = tree_steps.get_children()
+    if not rows:
+        try:
+            TOMATO_fig1.draw_idle()
+        except Exception:
+            pass
+        return
+
+    # ---- 4) draw a marker pair for every step in the table ----------------
+    # column order in tree_steps: Step number(0), F start(1), F end(2),
+    #                             Step start(3), Step end(4)
+    for row in rows:
+        vals = tree_steps.item(row)['values']
+        try:
+            f_start, f_end = float(vals[1]), float(vals[2])
+            d_start, d_end = float(vals[3]), float(vals[4])
+        except (TypeError, ValueError, IndexError):
+            print('Step markers: skipping malformed step row:', vals)
+            continue
+
+        marker_start, = ax.plot(
+            d_start, f_start,
+            marker='o', linestyle='None',
+            color='lime', markeredgecolor='green',
+            markersize=6, zorder=6,
+            label=None,
+        )
+        marker_end, = ax.plot(
+            d_end, f_end,
+            marker='o', linestyle='None',
+            color='red', markeredgecolor='darkred',
+            markersize=6, zorder=6,
+            label=None,
+        )
+        step_marker_artists.extend([marker_start, marker_end])
+
+    # ---- 5) re-render -------------------------------------------------------
+    try:
+        TOMATO_fig1.draw_idle()
+    except Exception:
+        # non-fatal: markers exist, the canvas just can't blit right now
+        pass
 
 ############## TOMATO functions end ###################
 
