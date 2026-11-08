@@ -1656,19 +1656,35 @@ def analyze_steps():
 
 
 def delete_step():
+    """Deletes whatever row(s) are currently selected/highlighted in tree_steps
+    (Ctrl/Shift-click for multiple), then renumbers the remaining steps so the
+    'Step number' column stays consecutive (1..N) for analyze_steps()."""
     global step_number
-    list_items = tree_steps.get_children("")
-    tree_steps.delete(list_items[-1])
-    step_number -= 1
-    redraw_step_markers() 
+
+    selected = tree_steps.selection()
+    if not selected:
+        print('No step selected - click a row in the steps table first!')
+        return
+
+    # remove all highlighted rows (multi-selection supported)
+    tree_steps.delete(*selected)
+
+    # renumber the remaining rows consecutively from 1 and update the counter
+    remaining = tree_steps.get_children('')
+    step_number = len(remaining) + 1
+    for new_number, row in enumerate(remaining, start=1):
+        vals = list(tree_steps.item(row)['values'])
+        vals[0] = new_number
+        tree_steps.item(row, values=vals)
+
+    redraw_step_markers()   # wipe removed markers, keep the rest in sync
 
 
 def delete_all_steps():
     global step_number
-
-    tree_steps.delete(*tree_steps.get_children())
+    tree_steps.delete(*tree_steps.get_children(''))
     step_number = 1
-    redraw_step_markers() 
+    redraw_step_markers()
 
 
 def delete_result(event):
