@@ -939,6 +939,21 @@ def analyze_steps():
         row_list.append(tree_steps.item(row)["values"])
     treeview_df = pd.DataFrame(row_list, columns=columns)
 
+    # --- NEW: optionally reorder steps by their end value before fitting ---
+    if sort_steps_by_end.get():
+        step_ends = pd.to_numeric(treeview_df['Step end'], errors='coerce')
+        treeview_df = treeview_df.assign(_end_num=step_ends)
+        treeview_df = (
+            treeview_df.sort_values('_end_num')
+                       .drop(columns='_end_num')
+                       .reset_index(drop=True)
+        )
+        # re-number so 'Step number' is 1..N after sorting
+        treeview_df['Step number'] = range(1, len(treeview_df) + 1)
+
+
+
+
     # iterate through dataframe and fit each part of the curve
     TOMATO_fig1.get_tk_widget().destroy()
 
@@ -2315,7 +2330,7 @@ if __name__ == '__main__':
     TOMATO_panel.grid_columnconfigure(1, weight=1)
 
     # --- Input Format Selection (Radio-button style - mutually exclusive) ---
-
+    sort_steps_by_end = tk.BooleanVar(value=False)
 
     def select_input_format(*boxes):
         for i in boxes:
@@ -2442,6 +2457,9 @@ if __name__ == '__main__':
     )
     check_pre_TOMATO.grid(row=6, column=4, columnspan=2, sticky='W', padx=5, pady=1)
 
+
+
+
     # --- Preprocessing Parameters (shared with Tab 1) ---
     lbl_preprocessing = tk.Label(TOMATO_panel, text='PARAMETERS', font='Helvetica 8 bold')
     lbl_preprocessing.grid(row=14, column=0, columnspan=3, pady=(10, 0), sticky='w')
@@ -2490,6 +2508,13 @@ if __name__ == '__main__':
 
     TOMATO_frame_table = tk.Frame(tab5)
     TOMATO_frame_table.grid(row=2, column=0, sticky="nsew", padx=2, pady=2)
+
+
+    check_sort_steps = tk.Checkbutton(
+        TOMATO_parameter_frame,
+        text='Sort steps by \n "Step end" before fitting',
+        variable=sort_steps_by_end
+        ).grid(row=9, column=2, padx=1, sticky='W')
 
     ### create entry widgets ###
     # shift in distance
