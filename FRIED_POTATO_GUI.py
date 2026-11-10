@@ -749,6 +749,7 @@ def open_folder():
     fig = plot_TOMATO(Force_Distance_TOMATO)
     TOMATO_fig1 = FigureCanvasTkAgg(fig, TOMATO_figure_frame)
     TOMATO_fig1.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+    attach_click_listener()          # NEW
     attach_responsive_canvas(TOMATO_fig1, fig) 
     
     # Toolbar removed from inside TOMATO_figure_frame (was causing geometry conflict)
@@ -809,6 +810,8 @@ def change_FD(direction):
     fig = plot_TOMATO(Force_Distance_TOMATO)
     TOMATO_fig1 = FigureCanvasTkAgg(fig, TOMATO_figure_frame)
     TOMATO_fig1.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+    attach_click_listener()          # NEW
     attach_responsive_canvas(TOMATO_fig1, fig)
     # --- NEW: zoom/pan toolbar (gridded below the plot; no pack/grid conflict) ---
     try:
@@ -845,35 +848,61 @@ def end_click_key(event):
     end_click()
 
 
+# click-mode state: None (idle), 'start', or 'end'
+click_mode = None
+
+def attach_click_listener():
+    """Attaches the ONE-and-only click listener to the current TOMATO canvas.
+    Call this after every TOMATO_fig1 = FigureCanvasTkAgg(...) creation,
+    because destroying the canvas kills its listeners."""
+    TOMATO_fig1.mpl_connect('button_press_event', onclick_start_end)
+
+
 def start_click():
-    global cid
-    cid = TOMATO_fig1.mpl_connect('button_press_event', lambda event, arg=1: onclick_start_end(event, arg))
+    global click_mode
+    click_mode = 'start'
 
 
 def end_click():
-    global cid
-    cid = TOMATO_fig1.mpl_connect('button_press_event', lambda event, arg=0: onclick_start_end(event, arg))
+    global click_mode
+    click_mode = 'end'
 
 
-def onclick_start_end(event, pos):
-    global cid
+def onclick_start_end(event):
+    global click_mode
+
+    # nothing to do if no mode is armed
+    if click_mode is None:
+        return
+
+    # ignore clicks outside the plot area
+    if event.xdata is None or event.ydata is None:
+        return
+
+    # ignore clicks while zoom/pan is active on the toolbar
+    tb = globals().get('TOMATO_toolbar', None)
+    if tb is not None and getattr(tb, 'mode', '') and tb.mode != 'none':
+        return
 
     PD_position, F_position = float(event.xdata), float(event.ydata)
 
-    if pos == 1:
+    if click_mode == 'start':
         entryText_startF.set(round(F_position, 1))
         entryText_startD.set(round(PD_position, 1))
-    elif pos == 0:
+    elif click_mode == 'end':
         entryText_endF.set(round(F_position, 1))
         entryText_endD.set(round(PD_position, 1))
-    TOMATO_fig1.mpl_disconnect(cid)
+
+    click_mode = None   # one click consumes the mode — no accidental double-fire
 
 def analyze_all_marked():
     """Re-loads every curve with saved marks and runs the (unchanged) fitting
-    routine on it, one after another. Hands-on marking and fitting are thereby
-    fully separated."""
+    routine on it. All outputs (settings, fit plots, fit-data CSVs, pickles,
+    marked-steps file and the cumulative total_results) are collected in a
+    new 'Manual_analysis_<timestamp>' folder, analogous to the batch analysis."""
     global Force_Distance_TOMATO, der_arr_TOMATO, filename_TOMATO
     global orientation
+    global TOMATO_output_folder, tomato_total_results_file
 
     if not marked_steps_store:
         print('No marked curves saved yet - use "Save steps for this curve" first.')
@@ -885,46 +914,72 @@ def analyze_all_marked():
 
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
+    # --- NEW: create the Manual_analysis output folder ---
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    analysis_folder = os.path.join(folder, f'Manual_analysis_{timestamp}')
+    os.mkdir(analysis_folder)
+    output_window.insert('end', f'Created output folder: {analysis_folder} \n')
+    output_window.see('end')
+
+    # export the configuration file with the used parameters (same as batch)
+    export_settings(analysis_folder, timestamp, input_settings, input_fitting, input_format)
+
+    # snapshot of ALL marks used for this analysis
+    marks_snapshot = os.path.join(analysis_folder, f'marked_steps_used_{timestamp}.csv')
+    write_marks_csv(marks_snapshot)
+    print(f'Marked steps exported to: {marks_snapshot}')
+
+    # redirect all subsequent per-curve outputs into the analysis folder
+    TOMATO_output_folder = analysis_folder
+    # start a FRESH total_results file inside the analysis folder
+    tomato_total_results_file = None
+
     # process curves in folder order
     entries = sorted(marked_steps_store.items(), key=lambda kv: kv[1]['index'])
 
     output_window.insert('end', f'Starting TOMATO batch fitting of {len(entries)} curve(s)... \n')
     output_window.see('end')
 
-    for fname, rec in entries:
-        try:
-            output_window.insert('end', f'Fitting: {fname} \n')
-            output_window.see('end')
-            root.update_idletasks()   # keep the window responsive-ish
+    try:
+        for fname, rec in entries:
+            try:
+                output_window.insert('end', f'Fitting: {fname} \n')
+                output_window.see('end')
+                root.update_idletasks()   # keep the window responsive-ish
 
-            # --- load the curve exactly like change_FD() does ---
-            Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, \
-                filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data_TOMATO(
-                    rec['index'], Files, input_settings, input_format)
+                # --- load the curve exactly like change_FD() does ---
+                Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, \
+                    filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data_TOMATO(
+                        rec['index'], Files, input_settings, input_format)
 
-            der_arr_TOMATO = create_derivative(
-                input_settings, Frequency_value,
-                Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
+                der_arr_TOMATO = create_derivative(
+                    input_settings, Frequency_value,
+                    Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
 
-            orientation = 'forward'
-            if len(Force_Distance_TOMATO) >= 2 and \
-                    Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:
-                Force_Distance_TOMATO = np.flipud(Force_Distance_TOMATO)
-                orientation = 'reverse'
+                orientation = 'forward'
+                if len(Force_Distance_TOMATO) >= 2 and \
+                        Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:
+                    Force_Distance_TOMATO = np.flipud(Force_Distance_TOMATO)
+                    orientation = 'reverse'
 
-            entryText_filename.set(filename_TOMATO)
+                entryText_filename.set(filename_TOMATO)
 
-            # --- put this curve's marks into the tree and run the standard fit ---
-            delete_all_steps()
-            for vals in rec['rows']:
-                tree_steps.insert('', 'end', values=tuple(vals))
+                # --- put this curve's marks into the tree and run the standard fit ---
+                delete_all_steps()
+                for vals in rec['rows']:
+                    tree_steps.insert('', 'end', values=tuple(vals))
 
-            analyze_steps()   # existing routine, incl. optional sorting
+                analyze_steps()   # existing routine, incl. optional sorting
 
-        except Exception as e:
-            output_window.insert('end', f'ERROR while fitting {fname}: {e} \n')
-            output_window.see('end')
-            log_error(f'Batch TOMATO fitting of {fname} failed:\n{traceback.format_exc()}')
+            except Exception as e:
+                output_window.insert('end', f'ERROR while fitting {fname}: {e} \n')
+                output_window.see('end')
+                log_error(f'Batch TOMATO fitting of {fname} failed:\n{traceback.format_exc()}',
+                          analysis_folder, timestamp)
+
+    finally:
+        # always restore normal output behaviour afterwards
+        TOMATO_output_folder = None
 
     output_window.insert('end', 'TOMATO batch fitting finished. \n')
     output_window.see('end')
@@ -952,6 +1007,22 @@ def save_step():
     except Exception:
         print('Step saved to table, but drawing the markers failed:')
         traceback.print_exc()
+
+
+# --- NEW: output redirection for batch TOMATO analysis ---
+# None  -> outputs go to the raw-data folder (single-curve behaviour)
+# <str> -> outputs go to this folder (during 'Analyse all marked curves')
+TOMATO_output_folder = None
+
+def write_marks_csv(path):
+    """Writes the entire marked_steps_store as a CSV (shared by
+    save_current_marks() and the batch analysis)."""
+    out_df = []
+    for fn, rec in marked_steps_store.items():
+        for row in rec['rows']:
+            out_df.append([fn] + list(row))
+    pd.DataFrame(out_df, columns=MARKS_HEADER).to_csv(path, index=False)
+
 
 # --- NEW: cumulative total-results file for TOMATO, analogous to batch analysis ---
 tomato_total_results_file = None
@@ -998,9 +1069,8 @@ marked_steps_store = {}
 marked_steps_csv = None
 MARKS_HEADER = ['filename', 'step number', 'F start', 'F end', 'step start', 'step end']
 
+
 def save_current_marks():
-    """Saves the steps currently in tree_steps for the loaded curve,
-    both in memory (marked_steps_store) and to a cumulative CSV in the folder."""
     global marked_steps_store, marked_steps_csv
 
     rows = [tree_steps.item(r)['values'] for r in tree_steps.get_children()]
@@ -1011,17 +1081,11 @@ def save_current_marks():
     fname = entryText_filename.get()
     marked_steps_store[fname] = {'index': FD_number, 'rows': rows}
 
-    # rewrite the whole CSV from the store (few hundred rows at most)
     if marked_steps_csv is None:
         marked_steps_csv = os.path.join(
             folder, 'marked_steps_' + time.strftime('%Y%m%d-%H%M%S') + '.csv'
         )
-    out_df = []
-    for fn, rec in marked_steps_store.items():
-        for row in rec['rows']:
-            out_df.append([fn] + list(row))
-    out_df = pd.DataFrame(out_df, columns=MARKS_HEADER)
-    out_df.to_csv(marked_steps_csv, index=False)
+    write_marks_csv(marked_steps_csv)
     print(f'Marks for "{fname}" saved ({len(rows)} steps). '
           f'{len(marked_steps_store)} curve(s) marked so far.')
     redraw_step_markers() 
@@ -1116,6 +1180,7 @@ def load_marks_file():
               f'for the displayed curve "{current}".')
     redraw_step_markers() 
 
+
 def init_tomato_total_results():
     """Creates the cumulative total-results CSV once per session,
     with the exact same header the batch analysis writes."""
@@ -1123,8 +1188,9 @@ def init_tomato_total_results():
 
     if tomato_total_results_file is None:
         timestamp = time.strftime("%Y%m%d-%H%M%S")
+        out_dir = TOMATO_output_folder if TOMATO_output_folder is not None else folder
         tomato_total_results_file = os.path.join(
-            folder, 'total_results_' + timestamp + '.csv'
+            out_dir, 'total_results_' + timestamp + '.csv'
         )
         with open(tomato_total_results_file, 'w') as f:
             f.write(','.join(TOMATO_TOTAL_HEADER))
@@ -1136,6 +1202,10 @@ def analyze_steps():
     global subplot1
     global tree_results
     global ds_fit_dict_TOMATO
+
+    # --- NEW: outputs go to the batch folder during batch runs ---
+    out_dir = TOMATO_output_folder if TOMATO_output_folder is not None else folder
+
     # get input settings
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
     # FIX: nanosecond resolution timestamp. The seconds-resolution one collided
@@ -1607,7 +1677,7 @@ def analyze_steps():
 
     fit_df = pd.DataFrame(fit_data)
     csv_filename = f"{filename_TOMATO}_fit_data_{timestamp}.csv"
-    csv_filename_with_path = os.path.join(folder, csv_filename)
+    csv_filename_with_path = os.path.join(out_dir, csv_filename)
     fit_df.to_csv(csv_filename_with_path, index=False)
     print(f"Fit data saved to {csv_filename}")
 
@@ -1619,18 +1689,18 @@ def analyze_steps():
     # --- NEW: export fit figure (png/svg) and pickle of fit objects ---
     
     fig_filename_png = f"{filename_TOMATO}_fit_{timestamp}.png"
-    fig_path_png = os.path.join(folder, fig_filename_png)
+    fig_path_png = os.path.join(out_dir, fig_filename_png)
     figure1.savefig(fig_path_png, dpi=300)
     print(f"Fit figure saved to {fig_filename_png}")
     # SVG if the SVG option is ticked in the export settings
     if export_data.get('export_svg', True) == 1:
         fig_filename_svg = f"{filename_TOMATO}_fit_{timestamp}.svg"
-        fig_path_svg = os.path.join(folder, fig_filename_svg)
+        fig_path_svg = os.path.join(out_dir, fig_filename_svg)
         figure1.savefig(fig_path_svg, dpi=300)
         print(f"Fit figure saved to {fig_filename_svg}")
 
     pickle_filename = f"{filename_TOMATO}_fit_objects_{timestamp}.pickle"
-    pickle_path = os.path.join(folder, pickle_filename)
+    pickle_path = os.path.join(out_dir, pickle_filename)
     with open(pickle_path, 'wb') as f:
         pickle.dump({
             'fit_objects': fit,      # pylake FdFit objects (one per region)
@@ -1643,6 +1713,8 @@ def analyze_steps():
 
     TOMATO_fig1 = FigureCanvasTkAgg(figure1, TOMATO_figure_frame)
     TOMATO_fig1.get_tk_widget().grid(row=0, column=0, sticky="nsew")
+
+    attach_click_listener()          # NEW
     attach_responsive_canvas(TOMATO_fig1, figure1)
         # --- NEW: zoom/pan toolbar (gridded below the plot; no pack/grid conflict) ---
     try:
