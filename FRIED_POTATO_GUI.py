@@ -22,6 +22,7 @@ import multiprocessing as mp
 import json
 import pickle
 from pathlib import Path
+import re
 
 
 
@@ -1072,11 +1073,23 @@ MARKS_HEADER = ['filename', 'step number', 'F start', 'F end', 'step start', 'st
 
 def save_current_marks():
     global marked_steps_store, marked_steps_csv
+    global step_number
 
     rows = [tree_steps.item(r)['values'] for r in tree_steps.get_children()]
     if not rows:
         print('No steps marked for this curve - nothing to save.')
         return
+
+    rows = maybe_sort_step_rows(rows)          # NEW - sort at save time if ticked
+
+    # optional: reflect the sorted order in the visible table
+    if sort_steps_by_end.get():
+        delete_all_steps()
+        for r in rows:
+            tree_steps.insert('', 'end', values=tuple(r))
+        redraw_step_markers()
+        # keep the counter in sync: next newly marked step gets N+1
+        step_number = len(rows) + 1
 
     fname = entryText_filename.get()
     marked_steps_store[fname] = {'index': FD_number, 'rows': rows}
@@ -1088,7 +1101,13 @@ def save_current_marks():
     write_marks_csv(marked_steps_csv)
     print(f'Marks for "{fname}" saved ({len(rows)} steps). '
           f'{len(marked_steps_store)} curve(s) marked so far.')
-    redraw_step_markers() 
+    redraw_step_markers()
+
+def _base_curve_name(name):
+    """Strips a '_smooth_<timestamp>_downsamplesd' (or similar) suffix from a
+    curve name, e.g. '...08f_smooth_20260803-094445_downsamplesd' -> '...08f'.
+    Falls back to the unchanged name if the pattern isn't present."""
+    return re.sub(r'_smooth_\d{8}-\d{6}_downsamplesd?$', '', str(name))
 
 def load_marks_file():
     """Loads a previously saved marked_steps_*.csv and restores the marks
@@ -1180,6 +1199,244 @@ def load_marks_file():
               f'for the displayed curve "{current}".')
     redraw_step_markers() 
 
+def load_steps_from_total_results():
+    """Loads steps from a total_results_*.csv produced by the FRIED POTATO
+    batch analysis (which runs on raw H5 files) into the TOMATO marked-steps
+    store, so the curves can be re-fitted/refined with TOMATO later.
+
+    Supports BOTH export versions:
+      - v3.1+ (new):  flat header with model_type/fit_status columns
+      - older:        rows carry MORE fields than the header declares,
+                      because extra multi-line pylake fit reports were
+                      appended in the middle/end of each row. Parsed
+                      positionally from the stable row prefix.
+
+    Filename matching against the folder opened in TOMATO:
+      stage 1: exact name match
+      stage 2: raw name vs. TOMATO filename with the
+               '_smooth_<timestamp>_downsamplesd' suffix stripped
+               (batch runs on raw H5s; TOMATO usually on smoothed CSVs)
+
+    Curves that already have manually saved marks are left untouched."""
+    global marked_steps_store, marked_steps_csv
+
+    # ---- basic precondition: a folder must be open ----
+    if 'Files' not in globals() or not Files:
+        print('Please open a data folder first (Open Folder) before loading steps!')
+        return
+
+    import_path = tk.filedialog.askopenfilename(
+        title='Select total_results CSV',
+        filetypes=[('CSV files', '*.csv'), ('All files', '*.*')]
+    )
+    if not import_path:
+        return
+
+    # =========================================================================
+    # 1) READ THE FILE - flexibly supporting both export versions
+    #    Both branches produce the SAME 5-column DataFrame:
+    #    filename, F1, F2, step start, step end
+    #    ('step number' is not needed - section 3 renumbers after filtering)
+    # =========================================================================
+    import csv as csv_module
+
+    HEADER_NEW_MARKERS = ['model_type', 'fit_status']   # only in the new format
+
+    # peek at the header line only (cheap; also avoids feeding the old
+    # multi-line format to pandas)
+    try:
+        with open(import_path, 'r', encoding='utf-8-sig', newline='') as f:
+            header_line = next(csv_module.reader(f), [])
+    except Exception as e:
+        print(f'Could not open total_results file: {e}')
+        return
+
+    header = [str(h).strip().lstrip('\ufeff') for h in header_line]
+
+    is_new_format = (
+        all(m in header for m in HEADER_NEW_MARKERS)
+        and header.count('filename') == 1
+        and 'model' not in header
+    )
+
+    results_df = None
+    if is_new_format:
+        # ---- NEW FORMAT: plain pandas read ----
+        try:
+            results_df = pd.read_csv(import_path)
+        except Exception as e:
+            print(f'Could not read total_results file: {e}')
+            return
+        results_df.columns = [str(c).strip() for c in results_df.columns]
+
+        required = ['filename', 'F1', 'F2', 'step start', 'step end']
+        missing = [c for c in required if c not in results_df.columns]
+        if missing:
+            print(f'total_results file is missing expected columns: {missing}')
+            print('Header found in the file:', header)
+            return
+    else:
+        # ---- OLD FORMAT: rows have MORE fields than the header declares
+        #      (extra pylike fit-report columns in the middle/end of each row),
+        #      so header-based alignment is hopeless. The surplus is always
+        #      BEHIND the columns we need, so we read positionally from the
+        #      stable row prefix instead.
+        #      Verified prefix layout: [0] filename, [1] orientation,
+        #      [2] Derivative of, [3] step number, [4] F1, [5] F2, [6] Fc,
+        #      [7] step start, [8] step end, [9] step length, ...
+        print('Old export format detected - using the tolerant parser...')
+        try:
+            with open(import_path, 'r', encoding='utf-8-sig', newline='') as f:
+                raw_rows = list(csv_module.reader(f))
+        except Exception as e:
+            print(f'Could not read total_results file: {e}')
+            return
+
+        if not raw_rows:
+            print('The total_results file is empty.')
+            return
+
+        records = []
+        n_skipped = 0
+        for row in raw_rows[1:]:
+            if not row or all(not str(c).strip() for c in row):
+                continue   # blank line
+            # light sanity check on the prefix before trusting it
+            if len(row) < 9 or str(row[0]).strip().lower() == 'filename':
+                n_skipped += 1
+                continue
+            try:
+                records.append((
+                    str(row[0]).strip(),   # filename
+                    float(row[4]),          # F1
+                    float(row[5]),          # F2
+                    float(row[7]),          # step start
+                    float(row[8]),          # step end
+                ))
+            except (ValueError, IndexError):
+                n_skipped += 1   # step-0 ds-region row (empty fields) or padding
+
+        if n_skipped:
+            print(f'(Skipped {n_skipped} row(s) without usable step values - '
+                  f'these are the step-0 ds-region rows and blank padding.)')
+
+        results_df = pd.DataFrame(records, columns=[
+            'filename', 'F1', 'F2', 'step start', 'step end'])
+
+    # ---- shared sanity checks for both formats ----
+    if results_df is None or results_df.empty:
+        print('No usable step rows found in the file.')
+        return
+
+    _sample_names = results_df['filename'].dropna().unique()[:5]
+    print(f'Parsed {len(results_df)} step rows for '
+          f'{results_df["filename"].nunique()} curve(s). Sample names: '
+          f'{list(_sample_names)}')
+
+    # =========================================================================
+    # 2) BUILD LOOKUP INDEXES FOR THE FOLDER OPENED IN TOMATO
+    # =========================================================================
+    def tom_file_key(path):
+        stem = Path(path).name
+        for ext in ('.h5', '.csv'):
+            if stem.lower().endswith(ext.lower()):
+                stem = stem[:-len(ext)]
+                break
+        return stem
+
+    # direct name -> index, plus stripped-name -> index (both case-insensitive).
+    # NOTE: the _smooth_ suffix lives on the TOMATO side (smoothed CSVs), so
+    # stripping is applied to the FILE LIST names, not the results-file names.
+    direct_index = {}
+    base_index = {}
+    name_counts = {}
+    for idx, path in enumerate(Files):
+        stem = tom_file_key(path)
+        direct_index[stem.lower()] = idx
+        base_index.setdefault(_base_curve_name(stem).lower(), idx)
+        name_counts[stem.lower()] = name_counts.get(stem.lower(), 0) + 1
+
+    duplicates = [k for k, c in name_counts.items() if c > 1]
+    if duplicates:
+        print(f'WARNING: duplicate file basenames in folder: {duplicates}. '
+              f'The later file in the folder listing wins.')
+
+    # =========================================================================
+    # 3) MATCH CURVES AND REBUILD STEP ROWS
+    # =========================================================================
+    loaded, unmatched = 0, []
+    for fname, group in results_df.groupby('filename', sort=False):
+        stem = str(fname)
+        key = stem.lower()
+
+        # --- two-stage match: exact name, then stripped-of-_smooth_ name ---
+        if key in direct_index:
+            matched_index = direct_index[key]
+            matched_name = stem
+        else:
+            stripped = _base_curve_name(stem)
+            if stripped.lower() in base_index:
+                matched_index = base_index[stripped.lower()]
+                # use the actual smoothed-file name as the store key
+                matched_name = tom_file_key(Files[matched_index])
+            else:
+                unmatched.append(stem)
+                continue
+
+        # manual marks win: skip curves the user already marked by hand
+        if matched_name in marked_steps_store:
+            print(f'Skipping {matched_name}: steps already marked manually.')
+            continue
+
+        # ---- rebuild step rows from the batch result columns ----
+        # 'F1'/'F2' -> 'F start'/'F end'. Rows without step values (the
+        # step-0 ds-region row before the first step; empty cells read as NaN;
+        # '#N/A' strings) are filtered out FIRST; the consecutive 1..N
+        # numbering is assigned AFTER filtering, so no gaps remain.
+        rows = []
+        n = 0
+        for _, r in group.iterrows():
+            try:
+                f1 = float(r['F1'])
+                f2 = float(r['F2'])
+                step_start = float(r['step start'])
+                step_end = float(r['step end'])
+            except (TypeError, ValueError):
+                continue   # empty / NaN / '#N/A' -> ds region or padding
+            n += 1
+            rows.append((n, f1, f2, step_start, step_end))
+
+        if not rows:
+            print(f'Skipping {matched_name}: no usable step rows found.')
+            continue
+
+        marked_steps_store[matched_name] = {'index': matched_index, 'rows': rows}
+        loaded += 1
+
+    # NOTE: the session marks CSV is deliberately NOT re-pointed at the loaded
+    # file - subsequent "Save steps for this curve" writes go on writing to the
+    # normal marked_steps_*.csv, so batch-loaded steps are not silently merged
+    # into an unrelated marks file.
+
+    print(f'Loaded steps for {loaded} curve(s) from {os.path.basename(import_path)}.')
+    if unmatched:
+        print(f'WARNING: {len(unmatched)} curve(s) in the results file were NOT '
+              f'found in the open folder (tried exact name and stripped '
+              f'_smooth_...): {unmatched}')
+
+    # =========================================================================
+    # 4) SHOW THE MARKS OF THE CURRENTLY DISPLAYED CURVE, IF IT HAS ANY
+    # =========================================================================
+    current = entryText_filename.get()
+    if current in marked_steps_store:
+        delete_all_steps()
+        for vals in marked_steps_store[current]['rows']:
+            tree_steps.insert('', 'end', values=tuple(vals))
+        global step_number
+        step_number = len(marked_steps_store[current]['rows']) + 1
+        redraw_step_markers()
+        print(f'Restored {len(marked_steps_store[current]["rows"])} steps '
+              f'for the displayed curve "{current}".')
 
 def init_tomato_total_results():
     """Creates the cumulative total-results CSV once per session,
@@ -1196,6 +1453,33 @@ def init_tomato_total_results():
             f.write(','.join(TOMATO_TOTAL_HEADER))
             f.write('\n')
         print(f"Total results file created: {tomato_total_results_file}")
+
+
+def sort_step_rows(rows):
+    """Sorts step rows (Step number, F start, F end, Step start, Step end)
+    by 'Step end' ascending and renumbers them 1..N.
+    Used at save-time and fit-time so both stay consistent."""
+    if not rows:
+        return rows
+    ends = []
+    for row in rows:
+        try:
+            ends.append(float(row[4]))   # 'Step end'
+        except (TypeError, ValueError, IndexError):
+            ends.append(float('nan'))
+    pairs = sorted(zip(ends, [float(i) for i in range(len(rows))], rows),
+                   key=lambda t: t[0])
+    rows_sorted = [p[2] for p in pairs]
+    # renumber 1..N so 'Step number' stays consecutive (analyze_steps relies on it)
+    return [(n,) + tuple(r[1:]) for n, r in enumerate(rows_sorted, start=1)]
+
+
+def maybe_sort_step_rows(rows):
+    """Applies sort_step_rows() only when the 'sort steps by Step end'
+    checkbox is ticked."""
+    if sort_steps_by_end.get():
+        return sort_step_rows(rows)
+    return rows
 
 def analyze_steps():
     global TOMATO_fig1
@@ -2991,14 +3275,22 @@ if __name__ == '__main__':
     button_save = tk.Button(TOMATO_button_frame, text='Save results table', command=export_table, bg='palegreen2', font=('Arial', 11, 'bold'))
     button_save.grid(row=1, column=0, padx=4, pady=4, sticky="ew")
 
-    button_reset_parameters = tk.Button(TOMATO_button_frame, text='Reset parameters', command=lambda: parameters(0, default_values_FIT, default_values_constantF) if check_box_HF == 1 else (parameters(default_values_HF, default_values_FIT, default_values_constantF) if check_box_LF == 1 else parameters(default_values_CSV, default_values_FIT, default_values_constantF)), bg='palegreen2', font=('Arial', 11, 'bold'))
-    button_reset_parameters.grid(row=1, column=1, padx=4, pady=4, sticky="ew")
+    button_reset_parameters = tk.Button(TOMATO_panel, text='Reset parameters', command=lambda: parameters(0, default_values_FIT, default_values_constantF) if check_box_HF == 1 else (parameters(default_values_HF, default_values_FIT, default_values_constantF) if check_box_LF == 1 else parameters(default_values_CSV, default_values_FIT, default_values_constantF)), bg='palegreen2', font=('Arial', 10, 'bold'))
+    button_reset_parameters.grid(row=17, column=2, padx=1, pady=1, sticky="ew")
 
 
     button_load_marks = tk.Button(
         TOMATO_button_frame, text='Load marks from file',
         command=load_marks_file, height=1, padx=10, bg = "OliveDrab2",
     ).grid(row=0, column=1, pady=5)
+
+
+    button_load_total_results = tk.Button(
+        TOMATO_button_frame,
+        text='Load steps from total_results',
+        command=load_steps_from_total_results,
+        bg = "light sea green",height=1, padx=10
+    ).grid(row=1, column=1, pady=5)
 
 
     label_info = tk.Label(TOMATO_button_frame, text='TOMATO is unresponsive during fitting, please be patient\nmark step start <s>   mark step end <e>\n save marked step <Ctrl+s>   start analysis <Ctrl+f>\n delete results line <mark+del>\n previous curve <Left arrow>   next curve <Right arrow>')
