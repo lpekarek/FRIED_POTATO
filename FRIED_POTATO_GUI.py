@@ -6,6 +6,8 @@
 """ The parameters can be changed in the GUI before each run.
     Alternatively the default parameter values can be changed permanently in the POTATO_config file"""
 
+
+
 import tkinter as tk
 import traceback
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
@@ -24,6 +26,7 @@ import pickle
 from pathlib import Path
 import re
 
+import platform # To avoid blurry GUI - DPI scaling
 
 
 # relative imports
@@ -34,8 +37,8 @@ from FRIED_POTATO_constantF import get_constantF, display_constantF, fit_constan
 from FRIED_POTATO_fitting import fitting_ds, fitting_ss, fitting_FU, fitting_FU_ss
 from FRIED_POTATO_find_steps import calc_integral
 import FRIED_POTATO_fitting 
-# To avoid blurry GUI - DPI scaling
-import platform
+from FRIED_POTATO_TOMATO_batch import run_tomato_batch
+
 
 
 
@@ -522,6 +525,23 @@ def start_subprocess_wrapper(analysis_folder, timestamp, files, input_settings, 
         except:
             print(f"Critical error in subprocess: {error_msg}")
 
+def tomato_subprocess_wrapper(job, output_q):
+    """Runs inside the spawned process; catches errors and routes them to the GUI."""
+    try:
+        run_tomato_batch(job, output_q)
+    except Exception as e:
+        error_msg = (f"TOMATO subprocess error:\n{e}\n\n"
+                     f"Traceback:\n{traceback.format_exc()}")
+        try:
+            from FRIED_POTATO_TOMATO_batch import log_error
+            log_error(error_msg, job['analysis_folder'], job['timestamp'])
+        except Exception:
+            pass
+        try:
+            output_q.put(f"ERROR: TOMATO batch failed - {e}")
+        except Exception:
+            print(error_msg)
+
 def refresh():
     global new_image
     while output_q.empty() is False:
@@ -897,13 +917,12 @@ def onclick_start_end(event):
     click_mode = None   # one click consumes the mode — no accidental double-fire
 
 def analyze_all_marked():
-    """Re-loads every curve with saved marks and runs the (unchanged) fitting
-    routine on it. All outputs (settings, fit plots, fit-data CSVs, pickles,
-    marked-steps file and the cumulative total_results) are collected in a
-    new 'Manual_analysis_<timestamp>' folder, analogous to the batch analysis."""
-    global Force_Distance_TOMATO, der_arr_TOMATO, filename_TOMATO
-    global orientation
-    global TOMATO_output_folder, tomato_total_results_file
+    """Prepares a Manual_analysis_<timestamp> folder (settings export, marks
+    snapshot) and spawns a background subprocess that fits every marked curve,
+    exactly like the classic 'Analyse folder' pipeline. The GUI stays fully
+    responsive; several runs with different parameters can be started one
+    after another."""
+    global tomato_processes
 
     if not marked_steps_store:
         print('No marked curves saved yet - use "Save steps for this curve" first.')
@@ -915,74 +934,41 @@ def analyze_all_marked():
 
     input_settings, input_format, export_data, input_fitting, input_constantF = check_settings()
 
-    # --- NEW: create the Manual_analysis output folder ---
     timestamp = time.strftime("%Y%m%d-%H%M%S")
     analysis_folder = os.path.join(folder, f'Manual_analysis_{timestamp}')
     os.mkdir(analysis_folder)
     output_window.insert('end', f'Created output folder: {analysis_folder} \n')
     output_window.see('end')
 
-    # export the configuration file with the used parameters (same as batch)
     export_settings(analysis_folder, timestamp, input_settings, input_fitting, input_format)
+    write_marks_csv(os.path.join(analysis_folder, f'marked_steps_used_{timestamp}.csv'))
 
-    # snapshot of ALL marks used for this analysis
-    marks_snapshot = os.path.join(analysis_folder, f'marked_steps_used_{timestamp}.csv')
-    write_marks_csv(marks_snapshot)
-    print(f'Marked steps exported to: {marks_snapshot}')
+    # --- build a plain, picklable job dict (no tkinter objects!) ---
+    marks_payload = {}
+    for fname, rec in marked_steps_store.items():
+        rows = [[float(v) for v in r[1:5]] for r in rec['rows']]
+        marks_payload[str(fname)] = {'index': int(rec['index']), 'rows': rows}
 
-    # redirect all subsequent per-curve outputs into the analysis folder
-    TOMATO_output_folder = analysis_folder
-    # start a FRESH total_results file inside the analysis folder
-    tomato_total_results_file = None
+    job = {
+        'analysis_folder': analysis_folder,
+        'timestamp': timestamp,
+        'files': list(Files),
+        'marks': marks_payload,
+        'input_settings': input_settings,
+        'input_format': input_format,
+        'export_data': export_data,
+        'input_fitting': input_fitting,
+        'sort_steps': bool(sort_steps_by_end.get()),
+    }
 
-    # process curves in folder order
-    entries = sorted(marked_steps_store.items(), key=lambda kv: kv[1]['index'])
+    p = mp.Process(target=tomato_subprocess_wrapper, args=(job, output_q), daemon=True)
+    tomato_processes.append(p)
+    p.start()
 
-    output_window.insert('end', f'Starting TOMATO batch fitting of {len(entries)} curve(s)... \n')
-    output_window.see('end')
-
-    try:
-        for fname, rec in entries:
-            try:
-                output_window.insert('end', f'Fitting: {fname} \n')
-                output_window.see('end')
-                root.update_idletasks()   # keep the window responsive-ish
-
-                # --- load the curve exactly like change_FD() does ---
-                Force_Distance_TOMATO, Force_Distance_um_TOMATO, Frequency_value, \
-                    filename_TOMATO, Force_Distance_TOMATO_ds = read_in_data_TOMATO(
-                        rec['index'], Files, input_settings, input_format)
-
-                der_arr_TOMATO = create_derivative(
-                    input_settings, Frequency_value,
-                    Force_Distance_TOMATO[:, 0], Force_Distance_TOMATO[:, 1], 0)
-
-                orientation = 'forward'
-                if len(Force_Distance_TOMATO) >= 2 and \
-                        Force_Distance_TOMATO[0, 1] > Force_Distance_TOMATO[-1, 1]:
-                    Force_Distance_TOMATO = np.flipud(Force_Distance_TOMATO)
-                    orientation = 'reverse'
-
-                entryText_filename.set(filename_TOMATO)
-
-                # --- put this curve's marks into the tree and run the standard fit ---
-                delete_all_steps()
-                for vals in rec['rows']:
-                    tree_steps.insert('', 'end', values=tuple(vals))
-
-                analyze_steps()   # existing routine, incl. optional sorting
-
-            except Exception as e:
-                output_window.insert('end', f'ERROR while fitting {fname}: {e} \n')
-                output_window.see('end')
-                log_error(f'Batch TOMATO fitting of {fname} failed:\n{traceback.format_exc()}',
-                          analysis_folder, timestamp)
-
-    finally:
-        # always restore normal output behaviour afterwards
-        TOMATO_output_folder = None
-
-    output_window.insert('end', 'TOMATO batch fitting finished. \n')
+    output_window.insert(
+        'end',
+        f'TOMATO batch started in background ({len(marks_payload)} curve(s)). '
+        f'Progress appears here via the Refresh button. \n')
     output_window.see('end')
 
 
@@ -1067,6 +1053,8 @@ TOMATO_TOTAL_HEADER = [
 # --- NEW: deferred batch marking for TOMATO ---
 # filename -> {'index': curve index in Files, 'rows': list of step tuples}
 marked_steps_store = {}
+tomato_processes = []   # keeps references to spawned TOMATO batch subprocesses
+
 marked_steps_csv = None
 MARKS_HEADER = ['filename', 'step number', 'F start', 'F end', 'step start', 'step end']
 
@@ -1663,13 +1651,23 @@ def analyze_steps():
                 ))
 
                 # Plot the fitted region and model (mirrors the forward ss-region plotting)
+
                 F_ss_model = FRIED_POTATO_fitting.model_ss(distance, fit_ss.params)
                 fit_data[f"Fit_ss_{i}"] = F_ss_model
                 subplot1.plot(d_fitting_region_ss, f_fitting_region_ss, color=diff_colors[i])
                 subplot1.plot(distance, F_ss_model, marker=None, linewidth=1, linestyle='dashed', color="black")
-                
-                ds_fit_region_end = real_step_start
 
+                # --- NEW: plot the ds model curve from the FU fit, dashed grey, on top ---
+                try:
+                    F_ds_model = FRIED_POTATO_fitting.model_ds(
+                        distance, FRIED_POTATO_fitting.fit_ds.params)
+                    fit_data[f"Fit_ds_{i}"] = F_ds_model
+                    subplot1.plot(distance, F_ds_model, marker=None, linewidth=1.5,
+                                linestyle='dashed', color='grey', zorder=10)
+                except Exception as e:
+                    print(f"Warning: could not plot ds model curve: {e}")
+
+                ds_fit_region_end = real_step_start
             else:
                 # Standard fitting_ds for normal forward analysis
                 ds_fit_dict_TOMATO, TOMATO_area_ds, real_step_start, fit_ds = fitting_ds(
